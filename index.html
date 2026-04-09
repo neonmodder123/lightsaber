@@ -1451,19 +1451,20 @@
 
     var supportText = '';
     var supportClass = '';
+    var supportedNote = 'Supported: A12\u2013A18 Pro on iOS 18.4\u201318.6.2';
     if (!isIphone) {
       supportClass = 'unsupported';
-      supportText = 'iPhone only.';
+      supportText = 'Not an iPhone. ' + supportedNote + '.';
     } else if (major < 18 || (major === 18 && minor < 4)) {
       supportClass = 'unsupported';
-      supportText = 'iOS ' + iosVer + ' is not supported.';
+      supportText = 'iOS ' + iosVer + ' \u2014 not supported. ' + supportedNote + '.';
     } else if (major === 18 && minor >= 4 && (minor < 6 || (minor === 6 && patch <= 2))) {
       supportClass = 'supported';
-      supportText = 'iOS ' + iosVer;
+      supportText = 'iOS ' + iosVer + ' \u2014 supported';
       canRun = true;
     } else {
       supportClass = 'unsupported';
-      supportText = 'iOS ' + iosVer + ' is not yet supported.';
+      supportText = 'iOS ' + iosVer + ' \u2014 not yet supported. ' + supportedNote + '.';
     }
     supportMsg.className = supportClass;
     supportMsg.textContent = supportText;
