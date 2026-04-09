@@ -39,7 +39,7 @@ CHAIN_TAGS = re.compile(
     r'\[PE\]|\[PE-DBG\]|\[SBX1\]|\[SBC\]|\[POWERCUFF\]|'
     r'\[FILE-DL\]|\[FILE-DL-EARLY\]|\[HTTP-UPLOAD\]|'
     r'\[APP\]|\[ICLOUD\]|\[KEYCHAIN\]|\[WIFI\]|'
-    r'\[MG\]|\[MPD\]|'
+    r'\[MG\]|\[MPD\]|\[APPLIMIT\]|'
     r'nativeCallBuff|kernel_base|kernel_slide|'
     r'SBX0|SBX1|sbx0:|sbx1:|'
     r'MIG_FILTER_BYPASS |INJECTJS |CHAIN |DRIVER-POSTEXPL |DRIVER-NEWTHREAD |'
@@ -53,7 +53,7 @@ CHAIN_TAGS = re.compile(
 INTERESTING_PATTERNS = [
     (re.compile(r'\[PE\]|\[PE-DBG\]|kernel_base|kernel_slide', re.IGNORECASE), GREEN),
     (re.compile(r'\[SBX1\]|SBX0|SBX1|sbx0:|sbx1:', re.IGNORECASE), MAGENTA),
-    (re.compile(r'\[SBC\]|\[POWERCUFF\]|\[MG\]', re.IGNORECASE), CYAN),
+    (re.compile(r'\[SBC\]|\[POWERCUFF\]|\[MG\]|\[APPLIMIT\]', re.IGNORECASE), CYAN),
     (re.compile(r'\[FILE-DL\]|\[HTTP-UPLOAD\]|\[APP\]|\[ICLOUD\]|\[KEYCHAIN\]|\[WIFI\]', re.IGNORECASE), CYAN),
     (re.compile(r'MIG_FILTER_BYPASS|INJECTJS|CHAIN |DRIVER-POSTEXPL|DRIVER-NEWTHREAD', re.IGNORECASE), YELLOW),
     (re.compile(r'SIGBUS|SIGSEGV|EXC_BAD|EXC_CRASH|pac_exception|pac.violation', re.IGNORECASE), RED),

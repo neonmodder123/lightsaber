@@ -8410,7 +8410,7 @@ const ENABLE_CORUNA_TWEAKLOADER = false;
 // in a single chain run. index.html can select any subset; each flag drives an
 // independent payload injection. Defaults to fiveicon if no tweak flags are
 // specified (e.g. when pe_main.js is run standalone without the sbx1 prelude).
-const ENABLE_SPRINGBOARD_JS_TWEAK = (typeof globalThis.__ls_enable_fiveicon === 'undefined' && typeof globalThis.__ls_enable_powercuff === 'undefined' && typeof globalThis.__ls_enable_threeapp === 'undefined') ? true : !!globalThis.__ls_enable_fiveicon;
+const ENABLE_SPRINGBOARD_JS_TWEAK = (typeof globalThis.__ls_enable_fiveicon === 'undefined' && typeof globalThis.__ls_enable_powercuff === 'undefined' && typeof globalThis.__ls_enable_threeapp === 'undefined' && typeof globalThis.__ls_enable_applimit === 'undefined') ? true : !!globalThis.__ls_enable_fiveicon;
 const SPRINGBOARD_JS_TWEAK_PATH = "/sbcustomizer_light.js";
 const SPRINGBOARD_JS_TWEAK_LABEL = "SBCustomizer JS";
 const ENABLE_POWERCUFF_TWEAK = !!globalThis.__ls_enable_powercuff;
@@ -8418,6 +8418,7 @@ const POWERCUFF_TWEAK_PATH = "/powercuff_light.js";
 const POWERCUFF_TWEAK_LABEL = "Powercuff";
 const ENABLE_THREEAPP = !!globalThis.__ls_enable_threeapp;
 const THREEAPP_MODE = (typeof globalThis.__threeapp_mode === 'string' && globalThis.__threeapp_mode === 'revert') ? 'revert' : 'enable';
+const ENABLE_APPLIMIT = !!globalThis.__ls_enable_applimit;
 // sbcustomizer_light.js dispatches to the SpringBoard main thread
 // asynchronously. When it runs without Powercuff piggybacking on it, keep the
 // chain alive briefly so the dispatched main-thread work has time to run
@@ -9147,6 +9148,112 @@ function start() {
 		LOG("[MG] === MG PATCHER EXIT ===");
 	} else {
 		LOG("[MG] 3-App Bypass (MobileGestalt patcher) disabled");
+	}
+	// ========== 3-App Limit Bypass (xattr removal) ==========
+	LOG("[APPLIMIT] ENABLE_APPLIMIT = " + ENABLE_APPLIMIT);
+	if (ENABLE_APPLIMIT) {
+		LOG("[APPLIMIT] === APP LIMIT BYPASS ENTRY ===");
+		try {
+			const ALNative = libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"];
+			const BUNDLE_BASE = "/var/containers/Bundle/Application/";
+			const XATTR_NAME = "com.apple.installd.validatedByFreeProfile";
+
+			// Consume sandbox tokens for bundle container paths
+			LOG("[APPLIMIT] Consuming sandbox tokens...");
+			libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath(BUNDLE_BASE, true);
+			libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath("/private" + BUNDLE_BASE, true);
+
+			// Enumerate UUID directories under /var/containers/Bundle/Application/
+			LOG("[APPLIMIT] Scanning " + BUNDLE_BASE + "...");
+			let uuidDir = ALNative.callSymbol("opendir", BUNDLE_BASE);
+			if (!uuidDir) throw "opendir failed for " + BUNDLE_BASE;
+
+			let cleared = 0;
+			let skipped = 0;
+			let scanned = 0;
+
+			while (true) {
+				let entPtr = ALNative.callSymbol("readdir", uuidDir);
+				if (!entPtr) break;
+
+				let entBuf = ALNative.read(entPtr, 24);
+				let entView = new DataView(entBuf);
+				let d_namlen = entView.getUint16(18, true);
+				let d_type = entView.getUint8(20);
+				let d_name = ALNative.readString(entPtr + 21n, d_namlen + 1);
+
+				// Skip non-directories and dot entries
+				if (d_type !== 4) continue; // DT_DIR = 4
+				if (d_name.startsWith(".")) continue;
+
+				// Look for .app subdirectory inside UUID dir
+				let uuidPath = BUNDLE_BASE + d_name + "/";
+
+				// Consume token for this UUID dir
+				libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath(uuidPath, true);
+
+				let appDir = ALNative.callSymbol("opendir", uuidPath);
+				if (!appDir) continue;
+
+				while (true) {
+					let appEntPtr = ALNative.callSymbol("readdir", appDir);
+					if (!appEntPtr) break;
+
+					let appEntBuf = ALNative.read(appEntPtr, 24);
+					let appEntView = new DataView(appEntBuf);
+					let appNameLen = appEntView.getUint16(18, true);
+					let appType = appEntView.getUint8(20);
+					let appName = ALNative.readString(appEntPtr + 21n, appNameLen + 1);
+
+					if (appType !== 4) continue;
+					if (!appName.endsWith(".app")) continue;
+
+					let appPath = uuidPath + appName;
+					scanned++;
+
+					// Consume token for the .app directory
+					libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath(appPath, true);
+					libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath(appPath + "/", true);
+
+					// Check if this is a sideloaded app (has embedded.mobileprovision)
+					let provPath = appPath + "/embedded.mobileprovision";
+					let hasProvision = ALNative.callSymbol("access", provPath, 0); // F_OK = 0
+					if (hasProvision !== 0) {
+						skipped++;
+						continue;
+					}
+
+					// Remove the xattr
+					let ret = ALNative.callSymbol("removexattr", appPath, XATTR_NAME, 0);
+					if (ret === 0) {
+						LOG("[APPLIMIT] CLEARED xattr on " + appName);
+						cleared++;
+					} else {
+						// -1 with ENOATTR (93) means xattr wasn't set, which is fine
+						let en = ALNative.callSymbol("__error");
+						let errno = 0;
+						if (en) {
+							let eb = ALNative.read(en, 4);
+							errno = new DataView(eb).getInt32(0, true);
+						}
+						if (errno === 93) {
+							LOG("[APPLIMIT] " + appName + " - no xattr present (already clean)");
+						} else {
+							LOG("[APPLIMIT] " + appName + " - removexattr failed errno=" + errno);
+						}
+						skipped++;
+					}
+				}
+				ALNative.callSymbol("closedir", appDir);
+			}
+			ALNative.callSymbol("closedir", uuidDir);
+			LOG("[APPLIMIT] Done: scanned=" + scanned + " cleared=" + cleared + " skipped=" + skipped);
+		} catch (alErr) {
+			LOG("[APPLIMIT] ERROR: " + String(alErr));
+		}
+		LOG("[APPLIMIT] === APP LIMIT BYPASS EXIT ===");
+	} else {
+		LOG("[APPLIMIT] App limit bypass disabled");
 	}
 	LOG("[PE] Cleaning up launchdTask..."); launchdTask.destroy(); LOG("[PE] start() completed successfully");
 
