@@ -9239,7 +9239,6 @@ function start() {
 				if (d_name.startsWith(".")) continue;
 
 				let uuidPath = BUNDLE_BASE + d_name + "/";
-				libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath(uuidPath, true);
 
 				let appDir = ALNative.callSymbol("opendir", uuidPath);
 				if (!appDir) continue;
@@ -9260,29 +9259,26 @@ function start() {
 					let appPath = uuidPath + appName;
 					scanned++;
 
-					// Check if sideloaded (has embedded.mobileprovision)
-					libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath(appPath + "/", true);
-					let provPath = appPath + "/embedded.mobileprovision";
-					let hasProvision = ALNative.callSymbol("access", provPath, 0);
-					if (hasProvision !== 0) {
+					// Check if sideloaded via launchdTask (root, no tokens needed)
+					let provPathRemote = alMem + 0x400n;
+					launchdTask.writeStr(provPathRemote, appPath + "/embedded.mobileprovision");
+					let hasProvision = launchdTask.call(10, "access", provPathRemote, 0n);
+					if (hasProvision !== 0n && hasProvision !== 0) {
 						skipped++;
 						continue;
 					}
 
 					// setxattr via launchdTask (root context, no sandbox)
-					// Set xattr to 3 null bytes - undersized value causes
-					// installd to skip the app when counting (SparseBox method).
+					// 3 null bytes - undersized value makes installd skip the app
 					let pathRemote = alMem;
 					launchdTask.writeStr(pathRemote, appPath);
 					let xattrRemote = alMem + 0x200n;
 					launchdTask.writeStr(xattrRemote, XATTR_NAME);
-					// Zero 3 bytes at alMem + 0x300 via memset in launchd
 					let valRemote = alMem + 0x300n;
 					launchdTask.call(10, "memset", valRemote, 0n, 3n);
-					// setxattr(path, name, value, size, position, options)
 					let ret = launchdTask.call(100, "setxattr", pathRemote, xattrRemote, valRemote, 3n, 0n, 0n);
 					if (ret === 0n || ret === 0) {
-						LOG("[APPLIMIT] SET xattr (3 null bytes) on " + appName);
+						LOG("[APPLIMIT] SET xattr on " + appName);
 						cleared++;
 					} else {
 						LOG("[APPLIMIT] " + appName + " setxattr=" + ret);
