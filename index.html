@@ -1512,7 +1512,22 @@
           dockIcons: parseInt((document.getElementById('sbcDockIcons') || {}).value, 10) || 4,
           hsCols: parseInt((document.getElementById('sbcHsCols') || {}).value, 10) || 4,
           hsRows: parseInt((document.getElementById('sbcHsRows') || {}).value, 10) || 6,
-          hideLabels: !!(document.getElementById('sbcHideLabels') || {}).checked
+          hideLabels: !!(document.getElementById('sbcHideLabels') || {}).checked,
+          threeapp: !!document.getElementById('tweakThreeapp').checked,
+          threeappMode: (document.getElementById('threeappMode') || {}).value || 'enable',
+          applimit: !!document.getElementById('tweakApplimit').checked,
+          mgBootChime: !!(document.getElementById('mgBootChime') || {}).checked,
+          mgChargeLimit: !!(document.getElementById('mgChargeLimit') || {}).checked,
+          mgTapToWake: !!(document.getElementById('mgTapToWake') || {}).checked,
+          mgCollisionSOS: !!(document.getElementById('mgCollisionSOS') || {}).checked,
+          mgPencil: !!(document.getElementById('mgPencil') || {}).checked,
+          mgActionButton: !!(document.getElementById('mgActionButton') || {}).checked,
+          mgAOD: !!(document.getElementById('mgAOD') || {}).checked,
+          mgStageManager: !!(document.getElementById('mgStageManager') || {}).checked,
+          mgInternalInstall: !!(document.getElementById('mgInternalInstall') || {}).checked,
+          mgSRD: !!(document.getElementById('mgSRD') || {}).checked,
+          mgShutter: !!(document.getElementById('mgShutter') || {}).checked,
+          mgiPadApps: !!(document.getElementById('mgiPadApps') || {}).checked
         };
         localStorage.setItem(LS_STATE_KEY, JSON.stringify(state));
       } catch (e) {}
@@ -1527,6 +1542,15 @@
         if (typeof s.powercuff === 'boolean') document.getElementById('tweakPowercuff').checked = s.powercuff;
         var hlEl = document.getElementById('sbcHideLabels');
         if (hlEl && typeof s.hideLabels === 'boolean') hlEl.checked = s.hideLabels;
+        if (typeof s.threeapp === 'boolean') document.getElementById('tweakThreeapp').checked = s.threeapp;
+        if (typeof s.applimit === 'boolean') document.getElementById('tweakApplimit').checked = s.applimit;
+        var tamEl = document.getElementById('threeappMode');
+        if (tamEl && typeof s.threeappMode === 'string') tamEl.value = s.threeappMode;
+        var mgCbIds = ['mgBootChime','mgChargeLimit','mgTapToWake','mgCollisionSOS','mgPencil','mgActionButton','mgAOD','mgStageManager','mgInternalInstall','mgSRD','mgShutter','mgiPadApps'];
+        for (var mgi = 0; mgi < mgCbIds.length; mgi++) {
+          var mgEl = document.getElementById(mgCbIds[mgi]);
+          if (mgEl && typeof s[mgCbIds[mgi]] === 'boolean') mgEl.checked = s[mgCbIds[mgi]];
+        }
         // Programmatic .checked = ... does not fire 'change', so manually
         // re-run the same row-sync logic that runs on a real toggle so the
         // tweak row visually matches its checked state (options panel
@@ -1553,7 +1577,7 @@
       } catch (e) {}
     }
     lsLoadState();
-    ['tweakFiveicon','tweakPowercuff','powercuffLevel','sbcHideLabels'].forEach(function(id) {
+    ['tweakFiveicon','tweakPowercuff','powercuffLevel','sbcHideLabels','tweakThreeapp','threeappMode','tweakApplimit','mgBootChime','mgChargeLimit','mgTapToWake','mgCollisionSOS','mgPencil','mgActionButton','mgAOD','mgStageManager','mgInternalInstall','mgSRD','mgShutter','mgiPadApps'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', lsSaveState);
     });
