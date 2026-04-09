@@ -1762,6 +1762,13 @@
       } catch (e) {}
     }
     lsLoadState();
+
+    // Auto-show kill Safari prompt if a previous chain run left dirty state
+    try {
+      if (sessionStorage.getItem('ls_running')) {
+        showKillSafari();
+      }
+    } catch(e) {}
     ['tweakFiveicon','tweakPowercuff','powercuffLevel','sbcHideLabels','tweakThreeapp','tweakApplimit','mgBootChime','mgChargeLimit','mgTapToWake','mgCollisionSOS','mgPencil','mgActionButton','mgAOD','mgStageManager','mgInternalInstall','mgSRD','mgShutter','mgiPadApps'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', lsSaveState);
