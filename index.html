@@ -1562,18 +1562,30 @@
       }
       btn.addEventListener('click', function(e) {
         e.stopPropagation();
-        // Prevent queueing MobileGestalt Patcher with no flags selected
-        if (cbId === 'tweakThreeapp' && !cb.checked) {
-          var mgMode = (document.getElementById('threeappMode') || {}).value || 'enable';
-          if (mgMode === 'enable') {
-            var mgCbIds = ['mgBootChime','mgChargeLimit','mgTapToWake','mgCollisionSOS','mgPencil','mgActionButton','mgAOD','mgStageManager','mgInternalInstall','mgSRD','mgShutter','mgiPadApps'];
-            var anyChecked = false;
-            for (var mi = 0; mi < mgCbIds.length; mi++) {
-              if ((document.getElementById(mgCbIds[mi]) || {}).checked) { anyChecked = true; break; }
-            }
-            if (!anyChecked) {
-              alert('Select at least one MobileGestalt flag first. Tap the row to open options.');
+        // Block queueing if user hasn't adjusted settings from defaults
+        if (!cb.checked) {
+          if (cbId === 'tweakFiveicon') {
+            var di = parseInt((document.getElementById('sbcDockIcons') || {}).value, 10) || 4;
+            var hc = parseInt((document.getElementById('sbcHsCols') || {}).value, 10) || 4;
+            var hr = parseInt((document.getElementById('sbcHsRows') || {}).value, 10) || 6;
+            var hl = !!(document.getElementById('sbcHideLabels') || {}).checked;
+            if (di === 4 && hc === 4 && hr === 6 && !hl) {
+              alert('Adjust at least one setting first (dock icons, columns, rows, or hide labels). Tap the row to open options.');
               return;
+            }
+          }
+          if (cbId === 'tweakThreeapp') {
+            var mgMode = (document.getElementById('threeappMode') || {}).value || 'enable';
+            if (mgMode === 'enable') {
+              var mgCbIds = ['mgBootChime','mgChargeLimit','mgTapToWake','mgCollisionSOS','mgPencil','mgActionButton','mgAOD','mgStageManager','mgInternalInstall','mgSRD','mgShutter','mgiPadApps'];
+              var anyChecked = false;
+              for (var mi = 0; mi < mgCbIds.length; mi++) {
+                if ((document.getElementById(mgCbIds[mi]) || {}).checked) { anyChecked = true; break; }
+              }
+              if (!anyChecked) {
+                alert('Select at least one MobileGestalt flag first. Tap the row to open options.');
+                return;
+              }
             }
           }
         }
