@@ -14,7 +14,7 @@ try { sessionStorage.setItem('ls_running', '1'); sessionStorage.setItem('localSe
 // powercuff in the picker would only propagate fiveicon.
 try {
     var __lsParams = new URLSearchParams(location.search || '');
-    var __validTweaks = { fiveicon: 1, powercuff: 1, threeapp: 1, applimit: 1 };
+    var __validTweaks = { fiveicon: 1, powercuff: 1, mgpatcher: 1, applimit: 1 };
     var __tweaksList = [];
     var __rawTweaks = __lsParams.get('tweaks') || __lsParams.get('tweak') || '';
     if (__rawTweaks) {
@@ -55,7 +55,7 @@ try {
     globalThis.__ls_sbc_hs_rows = 6;
     globalThis.__ls_sbc_statbar = 0;
     globalThis.__ls_sbc_hide_labels = 0;
-    globalThis.__ls_threeapp_mode = 'enable';
+    globalThis.__ls_mgpatcher_mode = 'enable';
 }
 var basePrefix = location.pathname.startsWith('/lightsaber/') ? '/lightsaber' : '';
 var localHost = location.origin + basePrefix;

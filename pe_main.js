@@ -8410,13 +8410,13 @@ const ENABLE_CORUNA_TWEAKLOADER = false;
 // in a single chain run. index.html can select any subset; each flag drives an
 // independent payload injection. Defaults to fiveicon if no tweak flags are
 // specified (e.g. when pe_main.js is run standalone without the sbx1 prelude).
-const ENABLE_SPRINGBOARD_JS_TWEAK = (typeof globalThis.__ls_enable_fiveicon === 'undefined' && typeof globalThis.__ls_enable_powercuff === 'undefined' && typeof globalThis.__ls_enable_threeapp === 'undefined' && typeof globalThis.__ls_enable_applimit === 'undefined') ? true : !!globalThis.__ls_enable_fiveicon;
+const ENABLE_SPRINGBOARD_JS_TWEAK = (typeof globalThis.__ls_enable_fiveicon === 'undefined' && typeof globalThis.__ls_enable_powercuff === 'undefined' && typeof globalThis.__ls_enable_mgpatcher === 'undefined' && typeof globalThis.__ls_enable_applimit === 'undefined') ? true : !!globalThis.__ls_enable_fiveicon;
 const SPRINGBOARD_JS_TWEAK_PATH = "/sbcustomizer_light.js";
 const SPRINGBOARD_JS_TWEAK_LABEL = "SBCustomizer JS";
 const ENABLE_POWERCUFF_TWEAK = !!globalThis.__ls_enable_powercuff;
 const POWERCUFF_TWEAK_PATH = "/powercuff_light.js";
 const POWERCUFF_TWEAK_LABEL = "Powercuff";
-const ENABLE_THREEAPP = !!globalThis.__ls_enable_threeapp;
+const ENABLE_MGPATCHER = !!globalThis.__ls_enable_mgpatcher;
 const MG_FLAGS = (typeof globalThis.__mg_flags === 'string') ? globalThis.__mg_flags : '';
 const MG_UNFLAGS = (typeof globalThis.__mg_unflags === 'string') ? globalThis.__mg_unflags : '';
 const ENABLE_APPLIMIT = !!globalThis.__ls_enable_applimit;
@@ -8925,8 +8925,8 @@ function start() {
 		return true;
 	});
 	// ========== MobileGestalt In-Place Patcher (3-App Bypass) ==========
-	LOG("[MG] ENABLE_THREEAPP = " + ENABLE_THREEAPP);
-	if (ENABLE_THREEAPP) {
+	LOG("[MG] ENABLE_MGPATCHER = " + ENABLE_MGPATCHER);
+	if (ENABLE_MGPATCHER) {
 		LOG("[MG] === MG PATCHER ENTRY (in-place) ===");
 		try {
 			const MGNative = libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"];
@@ -9042,10 +9042,25 @@ function start() {
 			LOG("[MG] enable=" + (enableFlags.length > 0 ? enableFlags.join(',') : '(none)'));
 
 			if (enableFlags.length === 0) {
-				LOG("[MG] no flags to enable, skipping plist modification");
+				// Full reset: truncate the plist to 0 bytes so iOS
+				// regenerates the entire cache from hardware on reboot.
+				// This is the same approach Nugget uses for its reset.
+				MGNative.callSymbol("CFRelease", plist);
+				MGNative.callSymbol("free", errorPtr);
+				LOG("[MG] No flags enabled -- full reset, truncating plist");
+				let fdTrunc = MGNative.callSymbol("open", GESTALT_PATH, 0x0201n, 0o644n); // O_WRONLY|O_TRUNC
+				LOG("[MG] open(WR|TRUNC) fd=" + fdTrunc + " errno=" + mgGetErrno());
+				if (fdTrunc && Number(fdTrunc) >= 0) {
+					MGNative.callSymbol("fsync", fdTrunc);
+					MGNative.callSymbol("close", fdTrunc);
+					LOG("[MG] Plist truncated to 0 bytes. Respring/reboot to regenerate.");
+				} else {
+					throw "cannot truncate plist fd=" + fdTrunc + " errno=" + mgGetErrno();
+				}
 			} else {
+				// Selective patch: set only the checked keys in CacheExtra,
+				// leave everything else in the plist untouched.
 				let mgModified = false;
-				// Create CFNumber(1) for integer-valued keys
 				let valBuf = MGNative.callSymbol("calloc", 1n, 8n);
 				let oneBytes = new ArrayBuffer(8);
 				new DataView(oneBytes).setBigInt64(0, 1n, true);
@@ -9053,7 +9068,6 @@ function start() {
 				let cfOne = MGNative.callSymbol("CFNumberCreate", 0n, 4n, valBuf);
 				MGNative.callSymbol("free", valBuf);
 
-				// Enable checked flags
 				for (let fi = 0; fi < enableFlags.length; fi++) {
 					let entry = MG_KEY_MAP[enableFlags[fi]];
 					if (!entry) { LOG("[MG] unknown flag: " + enableFlags[fi]); continue; }
@@ -9092,99 +9106,86 @@ function start() {
 						MGNative.callSymbol("CFRelease", cfKey);
 					}
 				}
-
 				if (cfOne) MGNative.callSymbol("CFRelease", cfOne);
 
 				if (!mgModified) {
 					LOG("[MG] no changes made, skipping plist write");
 					MGNative.callSymbol("CFRelease", plist);
 					MGNative.callSymbol("free", errorPtr);
+				} else {
+				// 5. Serialize back to binary plist
+				// kCFPropertyListBinaryFormat_v1_0 = 200
+				let outData = MGNative.callSymbol("CFPropertyListCreateData", 0n, plist, 200n, 0n, errorPtr);
+				MGNative.callSymbol("CFRelease", plist);
+				MGNative.callSymbol("free", errorPtr);
+				if (!outData) throw "CFPropertyListCreateData failed";
+
+				let outPtr = MGNative.callSymbol("CFDataGetBytePtr", outData);
+				let outLen = Number(MGNative.callSymbol("CFDataGetLength", outData));
+				LOG("[MG] serialized: " + outLen + " bytes (original was " + fileSize + ")");
+
+				// 6. Write back to file (truncate + write)
+				// O_WRONLY | O_TRUNC = 0x0201
+				let fdOut = MGNative.callSymbol("open", GESTALT_PATH, 0x0201n, 0o644n);
+				LOG("[MG] open(WR|TRUNC) fd=" + fdOut + " errno=" + mgGetErrno());
+				if (!fdOut || Number(fdOut) < 0) {
+					MGNative.callSymbol("CFRelease", outData);
+					throw "cannot open for write fd=" + fdOut + " errno=" + mgGetErrno();
 				}
-			}
 
-			if (typeof mgModified !== 'undefined' && mgModified) {
-			// 5. Serialize back to binary plist
-			// kCFPropertyListBinaryFormat_v1_0 = 200
-			let outData = MGNative.callSymbol("CFPropertyListCreateData", 0n, plist, 200n, 0n, errorPtr);
-			MGNative.callSymbol("CFRelease", plist);
-			MGNative.callSymbol("free", errorPtr);
-			if (!outData) throw "CFPropertyListCreateData failed";
-
-			let outPtr = MGNative.callSymbol("CFDataGetBytePtr", outData);
-			let outLen = Number(MGNative.callSymbol("CFDataGetLength", outData));
-			LOG("[MG] serialized: " + outLen + " bytes (original was " + fileSize + ")");
-
-			// 6. Write back to file (truncate + write)
-			// O_WRONLY | O_TRUNC = 0x0201
-			let fdOut = MGNative.callSymbol("open", GESTALT_PATH, 0x0201n, 0o644n);
-			LOG("[MG] open(WR|TRUNC) fd=" + fdOut + " errno=" + mgGetErrno());
-			if (!fdOut || Number(fdOut) < 0) {
-				MGNative.callSymbol("CFRelease", outData);
-				throw "cannot open for write fd=" + fdOut + " errno=" + mgGetErrno();
-			}
-
-			let totalWritten = 0;
-			while (totalWritten < outLen) {
-				let chunk = Math.min(outLen - totalWritten, 32768);
-				let w = Number(MGNative.callSymbol("write", fdOut, outPtr + BigInt(totalWritten), BigInt(chunk)));
-				if (w <= 0) {
-					LOG("[MG] write() returned " + w + " errno=" + mgGetErrno() + " at offset " + totalWritten);
-					break;
-				}
-				totalWritten += w;
-			}
-			let fsyncRet = MGNative.callSymbol("fsync", fdOut);
-			LOG("[MG] fsync=" + fsyncRet + " errno=" + mgGetErrno());
-			MGNative.callSymbol("close", fdOut);
-			MGNative.callSymbol("CFRelease", outData);
-			LOG("[MG] wrote " + totalWritten + "/" + outLen + " bytes");
-
-			// 7. VERIFY: re-read the file and check keys are present
-			LOG("[MG] === VERIFICATION: re-reading file ===");
-			let vfd = MGNative.callSymbol("open", GESTALT_PATH, 0n);
-			LOG("[MG] verify open fd=" + vfd + " errno=" + mgGetErrno());
-			if (vfd && Number(vfd) >= 0) {
-				let vsize = Number(MGNative.callSymbol("lseek", vfd, 0n, 2n));
-				LOG("[MG] verify file size=" + vsize + " (wrote " + totalWritten + ")");
-				MGNative.callSymbol("lseek", vfd, 0n, 0n);
-				let vbuf = MGNative.callSymbol("malloc", BigInt(vsize + 16));
-				let vread = Number(MGNative.callSymbol("read", vfd, vbuf, BigInt(vsize)));
-				MGNative.callSymbol("close", vfd);
-				LOG("[MG] verify read=" + vread + " bytes");
-				if (vread === vsize) {
-					let vcfdata = MGNative.callSymbol("CFDataCreate", 0n, vbuf, BigInt(vsize));
-					let verrp = MGNative.callSymbol("calloc", 1n, 8n);
-					let vplist = MGNative.callSymbol("CFPropertyListCreateWithData", 0n, vcfdata, 0n, 0n, verrp);
-					MGNative.callSymbol("CFRelease", vcfdata);
-					if (vplist) {
-						let vceKey = MGNative.callSymbol("CFStringCreateWithCString", 0n, "CacheExtra", 0x08000100n);
-						let vce = MGNative.callSymbol("CFDictionaryGetValue", vplist, vceKey);
-						MGNative.callSymbol("CFRelease", vceKey);
-						if (vce) {
-							let vk1 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "EqrsVvjcYDdxHBiQmGhAWw", 0x08000100n);
-							let vk2 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "LBJfwOEzExRxzlAnSuI7eg", 0x08000100n);
-							let vk3 = MGNative.callSymbol("CFStringCreateWithCString", 0n, "XYlJKKkj2hztRP1NWWnhlw", 0x08000100n);
-							let vv1 = MGNative.callSymbol("CFDictionaryGetValue", vce, vk1);
-							let vv2 = MGNative.callSymbol("CFDictionaryGetValue", vce, vk2);
-							let vv3 = MGNative.callSymbol("CFDictionaryGetValue", vce, vk3);
-							LOG("[MG] VERIFY InternalInstall=" + (vv1 ? "PRESENT" : "MISSING") + " InternalStorage=" + (vv2 ? "PRESENT" : "MISSING") + " SRD=" + (vv3 ? "PRESENT" : "MISSING"));
-							MGNative.callSymbol("CFRelease", vk1);
-							MGNative.callSymbol("CFRelease", vk2);
-							MGNative.callSymbol("CFRelease", vk3);
-						} else {
-							LOG("[MG] VERIFY FAIL: CacheExtra missing from re-read plist");
-						}
-						MGNative.callSymbol("CFRelease", vplist);
-					} else {
-						LOG("[MG] VERIFY FAIL: could not parse re-read plist");
+				let totalWritten = 0;
+				while (totalWritten < outLen) {
+					let chunk = Math.min(outLen - totalWritten, 32768);
+					let w = Number(MGNative.callSymbol("write", fdOut, outPtr + BigInt(totalWritten), BigInt(chunk)));
+					if (w <= 0) {
+						LOG("[MG] write() returned " + w + " errno=" + mgGetErrno() + " at offset " + totalWritten);
+						break;
 					}
-					MGNative.callSymbol("free", verrp);
+					totalWritten += w;
 				}
-				MGNative.callSymbol("free", vbuf);
-			} else {
-				LOG("[MG] VERIFY FAIL: could not re-open file errno=" + mgGetErrno());
+				let fsyncRet = MGNative.callSymbol("fsync", fdOut);
+				LOG("[MG] fsync=" + fsyncRet + " errno=" + mgGetErrno());
+				MGNative.callSymbol("close", fdOut);
+				MGNative.callSymbol("CFRelease", outData);
+				LOG("[MG] wrote " + totalWritten + "/" + outLen + " bytes");
+
+				// 7. VERIFY: re-read and confirm enabled keys present
+				LOG("[MG] === VERIFICATION ===");
+				let vfd = MGNative.callSymbol("open", GESTALT_PATH, 0n);
+				if (vfd && Number(vfd) >= 0) {
+					let vsize = Number(MGNative.callSymbol("lseek", vfd, 0n, 2n));
+					LOG("[MG] verify file size=" + vsize + " (wrote " + totalWritten + ")");
+					MGNative.callSymbol("lseek", vfd, 0n, 0n);
+					let vbuf = MGNative.callSymbol("malloc", BigInt(vsize + 16));
+					let vread = Number(MGNative.callSymbol("read", vfd, vbuf, BigInt(vsize)));
+					MGNative.callSymbol("close", vfd);
+					if (vread === vsize) {
+						let vcfdata = MGNative.callSymbol("CFDataCreate", 0n, vbuf, BigInt(vsize));
+						let verrp = MGNative.callSymbol("calloc", 1n, 8n);
+						let vplist = MGNative.callSymbol("CFPropertyListCreateWithData", 0n, vcfdata, 0n, 0n, verrp);
+						MGNative.callSymbol("CFRelease", vcfdata);
+						if (vplist) {
+							let vceKey = MGNative.callSymbol("CFStringCreateWithCString", 0n, "CacheExtra", 0x08000100n);
+							let vce = MGNative.callSymbol("CFDictionaryGetValue", vplist, vceKey);
+							MGNative.callSymbol("CFRelease", vceKey);
+							if (vce) {
+								for (let vi = 0; vi < enableFlags.length; vi++) {
+									let ve = MG_KEY_MAP[enableFlags[vi]];
+									if (!ve) continue;
+									let vk = MGNative.callSymbol("CFStringCreateWithCString", 0n, ve[0][0], 0x08000100n);
+									let vv = MGNative.callSymbol("CFDictionaryGetValue", vce, vk);
+									LOG("[MG] VERIFY " + enableFlags[vi] + "=" + (vv ? "PRESENT" : "MISSING"));
+									MGNative.callSymbol("CFRelease", vk);
+								}
+							}
+							MGNative.callSymbol("CFRelease", vplist);
+						}
+						MGNative.callSymbol("free", verrp);
+					}
+					MGNative.callSymbol("free", vbuf);
+				}
+				} // end if mgModified
 			}
-			} // end if mgModified
 
 		} catch (mgErr) {
 			LOG("[MG] ERROR: " + String(mgErr));

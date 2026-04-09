@@ -1640,7 +1640,7 @@
               if ((document.getElementById(mgCbIds[mi]) || {}).checked) { anyChecked = true; break; }
             }
             if (!anyChecked) {
-              if (!confirm('No flags checked. This will remove all patched MobileGestalt keys and restore defaults. Respring to apply.')) return;
+              if (!confirm('No flags checked. This will reset the MobileGestalt cache so iOS regenerates it from hardware on reboot.')) return;
             }
           }
         }
