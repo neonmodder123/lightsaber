@@ -10,6 +10,23 @@ iOS 18.4 - 18.6.2 userland exploit chain with JavaScript injection that modifies
 
 Every arm64e iPhone (A12 - A18 Pro) running iOS 18.4 - 18.6.2.
 
+## Roadmap
+
+> **To do**
+>
+> - [ ] Improve chain reliability and reproducibility
+> - [ ] Add offsets to support more iOS 18.x versions
+> - [ ] Get StatBar functional (data reporting works but UI display hits nonstop PAC violations)
+> - [ ] Resolve compatibility issues with Nugget and similar tools
+
+> **Done**
+>
+> - [x] Full WebContent RCE → kernel R/W → sandbox escape chain
+> - [x] SBCustomizer (dock icons, home grid columns/rows, hide labels)
+> - [x] Powercuff battery saver (4 throttle levels via thermalmonitord)
+> - [x] Multi-tweak picker with single chain execution
+> - [x] Support for every arm64e iPhone on iOS 18.4 - 18.6.2
+
 ## How it works
 
 LightSaber chains a WebContent RCE into kernel R/W via sandbox escape, then uses a JSC + `objc_msgSend` / `dlsym` native bridge to inject JavaScript into other processes (SpringBoard, mediaplaybackd, thermalmonitord, etc.).
@@ -36,21 +53,6 @@ Runtime SpringBoard layout customization: dock icon count, home screen columns a
 ### Powercuff
 
 Port of [rpetrich's Powercuff](https://github.com/rpetrich/Powercuff). Underclocks CPU/GPU via thermalmonitord for extended battery life. Four levels: nominal, light, moderate, heavy. Lasts until reboot.
-
-## Roadmap
-
-- [ ] Improve chain reliability and reproducibility
-- [ ] Add offsets to support more iOS 18.x versions
-- [ ] Get StatBar functional (data reporting works but UI display hits nonstop PAC violations)
-- [ ] Resolve compatibility issues with Nugget and similar tools
-
-### Done
-
-- [x] Full WebContent RCE → kernel R/W → sandbox escape chain
-- [x] SBCustomizer (dock icons, home grid columns/rows, hide labels)
-- [x] Powercuff battery saver (4 throttle levels via thermalmonitord)
-- [x] Multi-tweak picker with single chain execution
-- [x] Support for every arm64e iPhone on iOS 18.4 - 18.6.2
 
 ## Usage
 
