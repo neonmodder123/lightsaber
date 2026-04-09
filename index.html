@@ -599,22 +599,93 @@
       box-shadow: var(--shadow-row);
       transform: translateY(-1px);
     }
-    .tweak-row.experimental {
-      opacity: 0.68;
-      background: var(--card-inset);
+    /* Tweak detail sheet - slides in from right like Sileo */
+    .tweak-sheet-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 900;
+      background: rgba(0,0,0,0.35);
+      opacity: 0;
+      transition: opacity 0.25s var(--ease);
+      -webkit-tap-highlight-color: transparent;
     }
-    .tweak-row.experimental.checked {
-      opacity: 1;
-      background: var(--card-alt);
+    .tweak-sheet-backdrop.active { display: block; opacity: 1; }
+    .tweak-sheet {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: min(92vw, 480px);
+      z-index: 910;
+      background: var(--bg);
+      box-shadow: -8px 0 40px rgba(10,15,28,0.22);
+      transform: translateX(100%);
+      transition: transform 0.3s var(--ease-out);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 0;
     }
-    .tweak-row.testing {
-      opacity: 0.45;
-      background: var(--card-inset);
+    .tweak-sheet.active { transform: translateX(0); }
+    @media (prefers-reduced-motion: reduce) {
+      .tweak-sheet-backdrop { transition: none; }
+      .tweak-sheet { transition: none; }
     }
-    .tweak-row.testing.checked {
-      opacity: 0.7;
-      background: var(--card-alt);
+    .tweak-sheet-header {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 18px 14px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
     }
+    .tweak-sheet-back {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 4px 8px 4px 2px;
+      margin: -4px 0;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tweak-sheet-back:active { opacity: 0.6; }
+    .tweak-sheet-title {
+      flex: 1;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+    }
+    .tweak-sheet-body {
+      padding: 18px;
+    }
+    .tweak-sheet-body .tweak-row-desc {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .tweak-sheet-body .tweak-row-notes {
+      font-size: 0.74rem;
+      color: var(--subtle);
+      line-height: 1.55;
+      margin-bottom: 16px;
+    }
+    .tweak-sheet-body .tweak-row-options {
+      display: block !important;
+      margin-top: 0;
+      padding-top: 0;
+      border-top: none;
+    }
+    .tweak-sheet-body .tweak-row-desc-inline { display: none; }
     .tweak-row-badge {
       display: inline-block;
       font-size: 0.58rem;
@@ -657,8 +728,26 @@
       outline-offset: 3px;
       border-radius: 4px;
     }
-    .tweak-row-caret {
+    .tweak-row-info {
       display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--card-inset);
+      border: 1px solid var(--border-soft);
+      color: var(--subtle);
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: background 0.15s var(--ease), color 0.15s var(--ease);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tweak-row-info:active { background: var(--accent-soft); color: var(--accent); }
+    .tweak-row-caret {
+      display: none;
       align-items: center;
       justify-content: center;
       width: 14px;
@@ -765,7 +854,8 @@
       padding-top: 10px;
       border-top: 1px solid var(--border-soft);
     }
-    .tweak-row.checked .tweak-row-options { display: block; }
+    /* Options only visible inside the sheet panel, never inline */
+    .tweak-row.checked .tweak-row-options { display: none; }
     .tweak-row-options-label {
       font-family: var(--mono);
       font-size: 0.64rem;
@@ -1000,10 +1090,8 @@
       <div class="tweak-list">
         <div class="tweak-row" id="tweakRowFiveicon">
           <div class="tweak-row-head">
-            <button type="button" class="tweak-row-title" aria-expanded="false" aria-controls="tweakDetailFiveicon">
-              <span class="tweak-row-caret" aria-hidden="true">&rsaquo;</span>
-              <span class="tweak-row-name">SBCustomizer</span>
-            </button>
+            <span class="tweak-row-name">SBCustomizer</span>
+            <button type="button" class="tweak-row-info" aria-label="SBCustomizer details" data-sheet="tweakRowFiveicon">i</button>
             <label class="tweak-toggle" aria-label="Enable SBCustomizer">
               <input type="checkbox" id="tweakFiveicon">
               <span class="tweak-toggle-track" aria-hidden="true"></span>
@@ -1061,10 +1149,8 @@
 
         <div class="tweak-row" id="tweakRowPowercuff">
           <div class="tweak-row-head">
-            <button type="button" class="tweak-row-title" aria-expanded="false" aria-controls="tweakDetailPowercuff">
-              <span class="tweak-row-caret" aria-hidden="true">&rsaquo;</span>
-              <span class="tweak-row-name">Powercuff &mdash; battery saver</span>
-            </button>
+            <span class="tweak-row-name">Powercuff</span>
+            <button type="button" class="tweak-row-info" aria-label="Powercuff details" data-sheet="tweakRowPowercuff">i</button>
             <label class="tweak-toggle" aria-label="Enable Powercuff">
               <input type="checkbox" id="tweakPowercuff">
               <span class="tweak-toggle-track" aria-hidden="true"></span>
@@ -1086,13 +1172,10 @@
           </div>
         </div>
 
-        <div class="tweak-row testing" id="tweakRowThreeapp">
+        <div class="tweak-row" id="tweakRowThreeapp">
           <div class="tweak-row-head">
-            <button type="button" class="tweak-row-title" aria-expanded="false" aria-controls="tweakDetailThreeapp">
-              <span class="tweak-row-caret" aria-hidden="true">&rsaquo;</span>
-              <span class="tweak-row-name">MobileGestalt Patcher</span>
-              <span class="tweak-row-badge" style="color:#7d0202;background:#ffe0e0;border-color:#ff4040">in testing, avoid</span>
-            </button>
+            <span class="tweak-row-name">MobileGestalt Patcher</span>
+            <button type="button" class="tweak-row-info" aria-label="MobileGestalt Patcher details" data-sheet="tweakRowThreeapp">i</button>
             <label class="tweak-toggle" aria-label="Enable MobileGestalt Patcher">
               <input type="checkbox" id="tweakThreeapp">
               <span class="tweak-toggle-track" aria-hidden="true"></span>
@@ -1126,13 +1209,10 @@
           </div>
         </div>
 
-        <div class="tweak-row testing" id="tweakRowApplimit">
+        <div class="tweak-row" id="tweakRowApplimit">
           <div class="tweak-row-head">
-            <button type="button" class="tweak-row-title" aria-expanded="false" aria-controls="tweakDetailApplimit">
-              <span class="tweak-row-caret" aria-hidden="true">&rsaquo;</span>
-              <span class="tweak-row-name">3-App Limit Bypass</span>
-              <span class="tweak-row-badge" style="color:#7d0202;background:#ffe0e0;border-color:#ff4040">in testing, avoid</span>
-            </button>
+            <span class="tweak-row-name">3-App Limit Bypass</span>
+            <button type="button" class="tweak-row-info" aria-label="3-App Limit Bypass details" data-sheet="tweakRowApplimit">i</button>
             <label class="tweak-toggle" aria-label="Enable 3-App Limit Bypass">
               <input type="checkbox" id="tweakApplimit">
               <span class="tweak-toggle-track" aria-hidden="true"></span>
@@ -1188,7 +1268,16 @@
       <a href="https://github.com/34306">34306</a> &amp; <a href="https://github.com/khanhduytran0">khanhduytran0</a>, whose <a href="http://34306.lol/darksword/">site design</a> helped stabilize payload delivery on this project, <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> for UI suggestions, and anonymous contributors for help stabilizing the exploit chain.
     </div>
 
-    <p class="version">v0.0.92</p>
+    <p class="version">v0.0.93</p>
+  </div>
+
+  <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
+  <div class="tweak-sheet" id="tweakSheet">
+    <div class="tweak-sheet-header">
+      <button type="button" class="tweak-sheet-back" id="tweakSheetBack">&lsaquo; Back</button>
+      <span class="tweak-sheet-title" id="tweakSheetTitle"></span>
+    </div>
+    <div class="tweak-sheet-body" id="tweakSheetBody"></div>
   </div>
 
   <div id="introOverlay" class="overlay">
@@ -1414,18 +1503,45 @@
       if (cb.checked) el.classList.add('checked');
       else el.classList.remove('checked');
     }
-    function toggleTweakDetail(rowId) {
-      var el = document.getElementById(rowId);
-      if (!el) return;
-      var expanded = el.classList.toggle('expanded');
-      var detail = el.querySelector('.tweak-row-detail');
-      if (detail) {
-        if (expanded) detail.removeAttribute('hidden');
-        else detail.setAttribute('hidden', '');
-      }
-      var title = el.querySelector('.tweak-row-title');
-      if (title) title.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    // Sheet names for each tweak row
+    var tweakSheetNames = {
+      tweakRowFiveicon: 'SBCustomizer',
+      tweakRowPowercuff: 'Powercuff',
+      tweakRowThreeapp: 'MobileGestalt Patcher',
+      tweakRowApplimit: '3-App Limit Bypass'
+    };
+    var _sheetSourceRow = null;
+    function openTweakSheet(rowId) {
+      var row = document.getElementById(rowId);
+      if (!row) return;
+      var detail = row.querySelector('.tweak-row-detail');
+      var options = row.querySelector('.tweak-row-options');
+      var body = document.getElementById('tweakSheetBody');
+      body.innerHTML = '';
+      if (detail) { var clone = detail.cloneNode(false); clone.removeAttribute('hidden'); body.appendChild(detail); detail.removeAttribute('hidden'); }
+      if (options) body.appendChild(options);
+      _sheetSourceRow = row;
+      document.getElementById('tweakSheetTitle').textContent = tweakSheetNames[rowId] || '';
+      document.getElementById('tweakSheetBackdrop').classList.add('active');
+      document.getElementById('tweakSheet').classList.add('active');
     }
+    function closeTweakSheet() {
+      document.getElementById('tweakSheetBackdrop').classList.remove('active');
+      document.getElementById('tweakSheet').classList.remove('active');
+      // Move content back to source row after transition
+      setTimeout(function() {
+        if (!_sheetSourceRow) return;
+        var body = document.getElementById('tweakSheetBody');
+        while (body.firstChild) _sheetSourceRow.appendChild(body.firstChild);
+        // Re-hide detail
+        var detail = _sheetSourceRow.querySelector('.tweak-row-detail');
+        if (detail) detail.setAttribute('hidden', '');
+        _sheetSourceRow = null;
+      }, 320);
+    }
+    document.getElementById('tweakSheetBack').addEventListener('click', closeTweakSheet);
+    document.getElementById('tweakSheetBackdrop').addEventListener('click', closeTweakSheet);
+
     for (var ti = 0; ti < tweakRows.length; ti++) {
       (function(row) {
         var cb = document.getElementById(row.cbId);
@@ -1434,35 +1550,18 @@
           syncTweakRow(row);
         }
         var el = document.getElementById(row.rowId);
-        var title = el && el.querySelector('.tweak-row-title');
-        if (title) {
-          title.addEventListener('click', function(e) {
+        var infoBtn = el && el.querySelector('.tweak-row-info');
+        if (infoBtn) {
+          infoBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            toggleTweakDetail(row.rowId);
+            e.stopPropagation();
+            openTweakSheet(row.rowId);
           });
         }
       })(tweakRows[ti]);
     }
 
-    // Keep clicks on the inline options (level select) from also toggling the
-    // parent checkbox label.
-    var pcOptionsWrap = document.querySelector('#tweakRowPowercuff .tweak-row-options');
-    if (pcOptionsWrap) {
-      pcOptionsWrap.addEventListener('click', function(e) { e.stopPropagation(); });
-      pcOptionsWrap.addEventListener('change', function(e) { e.stopPropagation(); });
-    }
-    var sbcOptionsWrap = document.querySelector('#tweakRowFiveicon .tweak-row-options');
-    if (sbcOptionsWrap) {
-      sbcOptionsWrap.addEventListener('click', function(e) { e.stopPropagation(); });
-    }
-    var taOptionsWrap = document.querySelector('#tweakRowThreeapp .tweak-row-options');
-    if (taOptionsWrap) {
-      taOptionsWrap.addEventListener('click', function(e) { e.stopPropagation(); });
-    }
-    var alOptionsWrap = document.querySelector('#tweakRowApplimit .tweak-row-options');
-    if (alOptionsWrap) {
-      alOptionsWrap.addEventListener('click', function(e) { e.stopPropagation(); });
-    }
+    // Options are now in the sheet panel, no inline stop-propagation needed
     // Slider binding: keep the display value in sync with the native range
     // input, live while dragging. The count constants are used by both the
     // initial wiring and the reset handler so they stay in one place.
