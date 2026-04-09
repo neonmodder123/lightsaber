@@ -8925,7 +8925,7 @@ function start() {
 		return true;
 	});
 	// ========== MobileGestalt In-Place Patcher (3-App Bypass) ==========
-	LOG("[MG] ENABLE_THREEAPP = " + ENABLE_THREEAPP + " mode=" + THREEAPP_MODE);
+	LOG("[MG] ENABLE_THREEAPP = " + ENABLE_THREEAPP);
 	if (ENABLE_THREEAPP) {
 		LOG("[MG] === MG PATCHER ENTRY (in-place) ===");
 		try {
@@ -9039,12 +9039,12 @@ function start() {
 			let SHUTTER_VALS = {"h63QSdBCiT/z0WU6rdQv6Q": "US", "zHeENZu+wbg7PUprwNwBWg": "LL/A"};
 
 			let enableFlags = MG_FLAGS.split(',').filter(function(f) { return f.length > 0; });
-			let removeFlags = MG_UNFLAGS.split(',').filter(function(f) { return f.length > 0; });
-			LOG("[MG] enable=" + (enableFlags.length > 0 ? enableFlags.join(',') : '(none)') + " remove=" + (removeFlags.length > 0 ? removeFlags.join(',') : '(none)'));
+			LOG("[MG] enable=" + (enableFlags.length > 0 ? enableFlags.join(',') : '(none)'));
 
-			if (enableFlags.length === 0 && removeFlags.length === 0) {
-				LOG("[MG] nothing to do, skipping plist modification");
+			if (enableFlags.length === 0) {
+				LOG("[MG] no flags to enable, skipping plist modification");
 			} else {
+				let mgModified = false;
 				// Create CFNumber(1) for integer-valued keys
 				let valBuf = MGNative.callSymbol("calloc", 1n, 8n);
 				let oneBytes = new ArrayBuffer(8);
@@ -9065,6 +9065,7 @@ function start() {
 							let cfVal = MGNative.callSymbol("CFStringCreateWithCString", 0n, SHUTTER_VALS[mgKey], 0x08000100n);
 							MGNative.callSymbol("CFDictionarySetValue", cacheExtra, cfKey, cfVal);
 							LOG("[MG] SET " + mgKey + " = \"" + SHUTTER_VALS[mgKey] + "\"");
+							mgModified = true;
 							MGNative.callSymbol("CFRelease", cfVal);
 						} else if (mgKey === "9MZ5AdH43csAUajl/dU+IQ") {
 							let arr = MGNative.callSymbol("CFArrayCreateMutable", 0n, 2n, 0n);
@@ -9079,33 +9080,29 @@ function start() {
 							MGNative.callSymbol("CFArrayAppendValue", arr, n2);
 							MGNative.callSymbol("CFDictionarySetValue", cacheExtra, cfKey, arr);
 							LOG("[MG] SET " + mgKey + " = [1, 2]");
+							mgModified = true;
 							MGNative.callSymbol("CFRelease", n1); MGNative.callSymbol("CFRelease", n2);
 							MGNative.callSymbol("free", v1Buf); MGNative.callSymbol("free", v2Buf);
 							MGNative.callSymbol("CFRelease", arr);
 						} else {
 							MGNative.callSymbol("CFDictionarySetValue", cacheExtra, cfKey, cfOne);
 							LOG("[MG] SET " + mgKey + " = 1");
+							mgModified = true;
 						}
 						MGNative.callSymbol("CFRelease", cfKey);
 					}
 				}
 
-				// Remove unchecked flags
-				for (let fi = 0; fi < removeFlags.length; fi++) {
-					let entry = MG_KEY_MAP[removeFlags[fi]];
-					if (!entry) continue;
-					let keys = entry[0];
-					for (let ki = 0; ki < keys.length; ki++) {
-						let cfKey = MGNative.callSymbol("CFStringCreateWithCString", 0n, keys[ki], 0x08000100n);
-						MGNative.callSymbol("CFDictionaryRemoveValue", cacheExtra, cfKey);
-						LOG("[MG] REMOVED " + keys[ki]);
-						MGNative.callSymbol("CFRelease", cfKey);
-					}
-				}
-
 				if (cfOne) MGNative.callSymbol("CFRelease", cfOne);
+
+				if (!mgModified) {
+					LOG("[MG] no changes made, skipping plist write");
+					MGNative.callSymbol("CFRelease", plist);
+					MGNative.callSymbol("free", errorPtr);
+				}
 			}
 
+			if (typeof mgModified !== 'undefined' && mgModified) {
 			// 5. Serialize back to binary plist
 			// kCFPropertyListBinaryFormat_v1_0 = 200
 			let outData = MGNative.callSymbol("CFPropertyListCreateData", 0n, plist, 200n, 0n, errorPtr);
@@ -9187,6 +9184,7 @@ function start() {
 			} else {
 				LOG("[MG] VERIFY FAIL: could not re-open file errno=" + mgGetErrno());
 			}
+			} // end if mgModified
 
 		} catch (mgErr) {
 			LOG("[MG] ERROR: " + String(mgErr));
