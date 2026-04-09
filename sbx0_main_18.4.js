@@ -7120,7 +7120,9 @@
     "f35b705e8c57ae59e369ebc9145a9dbc": spray_profiles.compact_alt_fill,
     "43ba9900ff2fc7d9d32072540b2cab12": spray_profiles.wide,
     "c90776dbac058ed6957f476e287867f8": spray_profiles.wide,
-    "22f32fd975a694d340a6ad22b872b1ae": spray_profiles.wide
+    "22f32fd975a694d340a6ad22b872b1ae": spray_profiles.wide,
+    "c33e4990a9d3afe948b98d7d4205d596": spray_profiles.wide,
+    "6149d995753968891870832e3fec9195": spray_profiles.wide
   };
   const fallback_spray_profiles = [
     spray_profiles.tight,
