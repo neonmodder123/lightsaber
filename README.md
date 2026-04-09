@@ -42,7 +42,6 @@ Port of [rpetrich's Powercuff](https://github.com/rpetrich/Powercuff). Undercloc
 - [ ] Improve chain reliability and reproducibility
 - [ ] Add offsets to support more iOS 18.x versions
 - [ ] Get StatBar functional (data reporting works but UI display hits nonstop PAC violations)
-- [ ] ColorBanners payload (WIP)
 - [ ] Resolve compatibility issues with Nugget and similar tools
 
 ## Usage
