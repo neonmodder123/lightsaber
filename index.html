@@ -1065,42 +1065,6 @@
   </style>
 </head>
 <body>
-  <!-- Maintenance overlay - blocks all interaction -->
-  <div id="maintenance-wall" style="position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;flex-direction:column;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);">
-    <div style="background:#fff;border-radius:20px;padding:40px 36px;max-width:380px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
-      <div style="font-size:48px;margin-bottom:16px;">🔧</div>
-      <h2 style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter',sans-serif;font-size:22px;font-weight:700;color:#0a0f1c;margin-bottom:10px;">Under Maintenance</h2>
-      <p style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',sans-serif;font-size:15px;color:#4b5362;line-height:1.55;margin-bottom:6px;">Changes are being made.</p>
-      <p style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',sans-serif;font-size:15px;color:#4b5362;line-height:1.55;">Please check back soon.</p>
-    </div>
-  </div>
-  <script>
-  (function(){
-    var w=document.getElementById('maintenance-wall');
-    // Block removal via DevTools
-    new MutationObserver(function(m){
-      m.forEach(function(r){
-        r.removedNodes.forEach(function(n){
-          if(n===w||n.id==='maintenance-wall'){document.body.insertBefore(w,document.body.firstChild);}
-        });
-      });
-      if(!document.getElementById('maintenance-wall')){document.body.insertBefore(w,document.body.firstChild);}
-    }).observe(document.body,{childList:true});
-    // Block style changes
-    new MutationObserver(function(){
-      w.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;flex-direction:column;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);';
-    }).observe(w,{attributes:true,attributeFilter:['style','class']});
-    // Block all interaction beneath
-    w.addEventListener('click',function(e){e.stopPropagation();},true);
-    w.addEventListener('touchstart',function(e){e.stopPropagation();},true);
-    // Block keyboard shortcuts
-    document.addEventListener('keydown',function(e){
-      if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&(e.key==='I'||e.key==='J'||e.key==='C'))){e.preventDefault();}
-    },true);
-    // Prevent right-click
-    document.addEventListener('contextmenu',function(e){e.preventDefault();},true);
-  })();
-  </script>
   <div class="page">
     <div class="page-header">
       <div class="page-title">LightSaber</div>
@@ -1195,14 +1159,14 @@
         </div>
 
         <div class="tweak-section-label">System</div>
-        <div class="tweak-row" id="tweakRowThreeapp">
+        <div class="tweak-row" id="tweakRowMgpatcher">
           <div class="tweak-row-head">
             <span class="tweak-row-name">MobileGestalt Patcher<span class="tweak-row-hint">tap for options</span></span>
-            <button type="button" class="tweak-row-info" aria-label="MobileGestalt Patcher details" data-sheet="tweakRowThreeapp">i</button>
-            <input type="checkbox" id="tweakThreeapp" class="tweak-toggle">
-            <button type="button" class="tweak-queue-btn" data-cb="tweakThreeapp">GET</button>
+            <button type="button" class="tweak-row-info" aria-label="MobileGestalt Patcher details" data-sheet="tweakRowMgpatcher">i</button>
+            <input type="checkbox" id="tweakMgpatcher" class="tweak-toggle">
+            <button type="button" class="tweak-queue-btn" data-cb="tweakMgpatcher">GET</button>
           </div>
-          <div class="tweak-row-detail" id="tweakDetailThreeapp" hidden>
+          <div class="tweak-row-detail" id="tweakDetailMgpatcher" hidden>
             <div class="tweak-row-desc">Patches <a href="https://github.com/leminlimez/Nugget" target="_blank" rel="noopener">Nugget</a>-style MobileGestalt flags. Check to enable, uncheck to revert. Persists across reboots. Respring to apply.</div>
           </div>
           <div class="tweak-row-options">
@@ -1538,7 +1502,7 @@
     var tweakRows = [
       { rowId: 'tweakRowFiveicon', cbId: 'tweakFiveicon', name: 'fiveicon' },
       { rowId: 'tweakRowPowercuff', cbId: 'tweakPowercuff', name: 'powercuff' },
-      { rowId: 'tweakRowThreeapp', cbId: 'tweakThreeapp', name: 'threeapp' },
+      { rowId: 'tweakRowMgpatcher', cbId: 'tweakMgpatcher', name: 'mgpatcher' },
       { rowId: 'tweakRowApplimit', cbId: 'tweakApplimit', name: 'applimit' }
     ];
     function syncTweakRow(row) {
@@ -1558,7 +1522,7 @@
     var tweakSheetNames = {
       tweakRowFiveicon: 'SBCustomizer',
       tweakRowPowercuff: 'Powercuff',
-      tweakRowThreeapp: 'MobileGestalt Patcher',
+      tweakRowMgpatcher: 'MobileGestalt Patcher',
       tweakRowApplimit: '3-App Limit Bypass'
     };
     var _sheetSourceRow = null;
@@ -1669,14 +1633,14 @@
               return;
             }
           }
-          if (cbId === 'tweakThreeapp') {
+          if (cbId === 'tweakMgpatcher') {
             var mgCbIds = ['mgBootChime','mgChargeLimit','mgTapToWake','mgCollisionSOS','mgPencil','mgActionButton','mgAOD','mgStageManager','mgInternalInstall','mgSRD','mgShutter','mgiPadApps'];
             var anyChecked = false;
             for (var mi = 0; mi < mgCbIds.length; mi++) {
               if ((document.getElementById(mgCbIds[mi]) || {}).checked) { anyChecked = true; break; }
             }
             if (!anyChecked) {
-              if (!confirm('No flags checked. Delete MobileGestalt cache to restore factory defaults? Device will regenerate it on reboot.')) return;
+              if (!confirm('No flags checked. This will remove all patched MobileGestalt keys and restore defaults. Respring to apply.')) return;
             }
           }
         }
@@ -1737,7 +1701,7 @@
           hsCols: parseInt((document.getElementById('sbcHsCols') || {}).value, 10) || 4,
           hsRows: parseInt((document.getElementById('sbcHsRows') || {}).value, 10) || 6,
           hideLabels: !!(document.getElementById('sbcHideLabels') || {}).checked,
-          threeapp: !!document.getElementById('tweakThreeapp').checked,
+          mgpatcher: !!document.getElementById('tweakMgpatcher').checked,
           applimit: !!document.getElementById('tweakApplimit').checked,
           mgBootChime: !!(document.getElementById('mgBootChime') || {}).checked,
           mgChargeLimit: !!(document.getElementById('mgChargeLimit') || {}).checked,
@@ -1765,7 +1729,7 @@
         if (typeof s.powercuff === 'boolean') document.getElementById('tweakPowercuff').checked = s.powercuff;
         var hlEl = document.getElementById('sbcHideLabels');
         if (hlEl && typeof s.hideLabels === 'boolean') hlEl.checked = s.hideLabels;
-        if (typeof s.threeapp === 'boolean') document.getElementById('tweakThreeapp').checked = s.threeapp;
+        if (typeof s.mgpatcher === 'boolean') document.getElementById('tweakMgpatcher').checked = s.mgpatcher;
         if (typeof s.applimit === 'boolean') document.getElementById('tweakApplimit').checked = s.applimit;
         var mgCbIds = ['mgBootChime','mgChargeLimit','mgTapToWake','mgCollisionSOS','mgPencil','mgActionButton','mgAOD','mgStageManager','mgInternalInstall','mgSRD','mgShutter','mgiPadApps'];
         for (var mgi = 0; mgi < mgCbIds.length; mgi++) {
@@ -1805,7 +1769,7 @@
         showKillSafari();
       }
     } catch(e) {}
-    ['tweakFiveicon','tweakPowercuff','powercuffLevel','sbcHideLabels','tweakThreeapp','tweakApplimit','mgBootChime','mgChargeLimit','mgTapToWake','mgCollisionSOS','mgPencil','mgActionButton','mgAOD','mgStageManager','mgInternalInstall','mgSRD','mgShutter','mgiPadApps'].forEach(function(id) {
+    ['tweakFiveicon','tweakPowercuff','powercuffLevel','sbcHideLabels','tweakMgpatcher','tweakApplimit','mgBootChime','mgChargeLimit','mgTapToWake','mgCollisionSOS','mgPencil','mgActionButton','mgAOD','mgStageManager','mgInternalInstall','mgSRD','mgShutter','mgiPadApps'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', lsSaveState);
     });
