@@ -575,6 +575,12 @@
       color: var(--muted);
       padding: 5px 0;
       border-bottom: 1px solid var(--border-soft);
+      opacity: 0;
+      transform: translateY(6px);
+      animation: logLineIn 0.3s var(--ease-out) forwards;
+    }
+    @keyframes logLineIn {
+      to { opacity: 1; transform: translateY(0); }
     }
     .log-line:last-child { border-bottom: none; }
     .log-line.ok { color: #0f7a3d; }
@@ -1632,6 +1638,8 @@
       document.getElementById('logSheet').className = 'log-sheet';
     }
 
+    var logLineCount = 0;
+
     function logAppend(text, cls) {
       var body = document.getElementById('logSheetBody');
       var empty = document.getElementById('logSheetEmpty');
@@ -1639,8 +1647,11 @@
       var line = document.createElement('div');
       line.className = 'log-line' + (cls ? ' ' + cls : '');
       line.textContent = text;
+      line.style.animationDelay = (logLineCount * 0.12) + 's';
+      logLineCount++;
       body.appendChild(line);
-      body.scrollTop = body.scrollHeight;
+      // Scroll after the animation starts
+      setTimeout(function() { body.scrollTop = body.scrollHeight; }, (logLineCount * 120) + 100);
     }
 
     var supportMsg = document.getElementById('supportMsg');
@@ -2145,6 +2156,7 @@
 
       var logBody = document.getElementById('logSheetBody');
       logBody.innerHTML = '';
+      logLineCount = 0;
       currentStage = 'start';
       currentStageName = 'Starting';
       var dot = document.getElementById('logStageDot');
