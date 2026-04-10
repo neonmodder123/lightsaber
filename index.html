@@ -1564,15 +1564,14 @@
     ];
 
     // After the sbx0 fetch, Safari's main thread freezes and no more
-    // postMessages arrive. These timed messages tell the user what is
-    // (assumed to be) happening while the screen is frozen.
+    // postMessages arrive. We can't detect completion from here — the
+    // user has to check their device. These messages set expectations.
     var freezeMessages = [
-      { delay: 3,  text: 'Safari is frozen \u2014 kernel exploit is running. This is expected.' },
-      { delay: 10, text: 'Still working... the kernel exploit takes 10\u201330 seconds.' },
-      { delay: 20, text: 'Almost there \u2014 if Safari crashes/reloads soon, that usually means it worked.' },
-      { delay: 35, text: 'Taking a while. Wait up to 60 seconds total before giving up.' },
-      { delay: 50, text: 'If nothing happens in the next 10 seconds, force-quit Safari from the app switcher and try again.' },
-      { delay: 60, text: 'No response after 60 seconds. Force-quit Safari, reopen this page, and retry. Multiple attempts are normal.' },
+      { delay: 3,  text: 'Safari is frozen \u2014 this is expected. The kernel exploit is running in the background.' },
+      { delay: 12, text: 'This usually takes 10\u201330 seconds. Keep Safari in the foreground.' },
+      { delay: 25, text: 'Safari will eventually crash or reload on its own. When it does, check if your changes took effect.' },
+      { delay: 40, text: 'Still frozen? Give it another 20 seconds. If Safari stays frozen past 60 seconds, force-quit it from the app switcher.' },
+      { delay: 60, text: 'Force-quit Safari now, then check your home screen. If the tweaks didn\u2019t apply, reopen this page and try again \u2014 multiple attempts are normal.' },
     ];
 
     function startFreezeCountdown() {
