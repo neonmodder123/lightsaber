@@ -1922,6 +1922,13 @@
           return;
         }
       } catch(e) {}
+      try {
+        if (localStorage.getItem('ls_confirmed_once')) {
+          var sel2 = gatherSelection();
+          runExploit(sel2.tweaks, sel2.level, sel2.sbc, sel2.mg_flags, sel2.mg_unflags);
+          return;
+        }
+      } catch(e) {}
       document.getElementById('confirmOverlay').className = 'overlay active';
     }
 
@@ -1931,6 +1938,7 @@
 
     function proceedInstall() {
       document.getElementById('confirmOverlay').className = 'overlay';
+      try { localStorage.setItem('ls_confirmed_once', '1'); } catch(e) {}
       var sel = gatherSelection();
       runExploit(sel.tweaks, sel.level, sel.sbc, sel.mg_flags, sel.mg_unflags);
     }
