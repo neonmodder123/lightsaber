@@ -450,29 +450,89 @@
       display: inline-block;
       vertical-align: middle;
     }
-    #logBox {
+    /* Log sheet popup - mirrors tweak-sheet design */
+    .log-sheet-backdrop {
       display: none;
-      background: #1a1a1c;
-      border: 1px solid #2c2c2e;
-      border-radius: 12px;
-      margin-top: 14px;
+      position: fixed;
+      inset: 0;
+      z-index: 900;
+      background: rgba(0,0,0,0.35);
+      opacity: 0;
+      transition: opacity 0.25s var(--ease);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .log-sheet-backdrop.active { display: block; opacity: 1; }
+    .log-sheet {
+      position: fixed;
+      top: 50%; left: 50%;
+      width: min(92vw, 460px);
+      max-height: 80vh;
+      z-index: 910;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      box-shadow: var(--shadow-lg);
+      transform: translate(-50%, -50%) scale(0.92);
+      opacity: 0;
+      transition: transform 0.25s var(--ease-out), opacity 0.2s var(--ease);
       overflow: hidden;
+      padding: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
     }
-    #logBox.active { display: block; }
-    #logBox .log-header {
-      padding: 8px 12px;
-      font-size: 11px;
+    .log-sheet.active { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: auto; }
+    @media (prefers-reduced-motion: reduce) {
+      .log-sheet-backdrop { transition: none; }
+      .log-sheet { transition: none; }
+    }
+    .log-sheet-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px 12px;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .log-sheet-header .tweak-sheet-back {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 0.85rem;
       font-weight: 600;
-      color: #8e8e93;
-      background: #222224;
-      border-bottom: 1px solid #2c2c2e;
+      cursor: pointer;
+      padding: 4px 8px 4px 0;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
     }
-    #logScroll {
-      height: 200px;
-      overflow-y: scroll;
+    .log-sheet-header .tweak-sheet-back:active { opacity: 0.6; }
+    .log-sheet-title {
+      flex: 1;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      text-align: right;
+    }
+    .log-sheet-body {
+      flex: 1;
+      overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
-      padding: 8px 12px;
+      background: #1a1a1c;
+      padding: 10px 14px;
+      min-height: 180px;
+      max-height: 55vh;
+    }
+    .log-sheet-empty {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: #555;
+      text-align: center;
+      padding: 32px 0;
     }
     .log-line {
       font-family: 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
@@ -489,6 +549,20 @@
     .log-line.kernel { color: #ff9f0a; }
     .log-line.springboard { color: #bf5af2; }
     .log-line.pe { color: #30d158; }
+    .btn-view-log {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 6px 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-view-log:active { opacity: 0.5; }
+    .btn-view-log.visible { display: inline-block; }
     .version {
       font-family: var(--mono);
       font-size: 0.66rem;
@@ -1274,6 +1348,7 @@
         <button type="button" class="btn-clear-queue" id="clearQueueBtn">Clear queue</button>
       </div>
       <div id="installStatus" class="install-status"></div>
+      <button type="button" class="btn-view-log" id="viewLogBtn" onclick="openLogSheet()">View Log</button>
       <div class="tip">
         <div class="tip-icon">i</div>
         <div class="tip-body">
@@ -1325,6 +1400,17 @@
       <span class="tweak-sheet-title" id="tweakSheetTitle"></span>
     </div>
     <div class="tweak-sheet-body" id="tweakSheetBody"></div>
+  </div>
+
+  <div class="log-sheet-backdrop" id="logSheetBackdrop" onclick="closeLogSheet()"></div>
+  <div class="log-sheet" id="logSheet">
+    <div class="log-sheet-header">
+      <button type="button" class="tweak-sheet-back" onclick="closeLogSheet()">&lsaquo; Close</button>
+      <span class="log-sheet-title">Activity Log</span>
+    </div>
+    <div class="log-sheet-body" id="logSheetBody">
+      <div class="log-sheet-empty" id="logSheetEmpty">Waiting for exploit chain...</div>
+    </div>
   </div>
 
   <div id="introOverlay" class="overlay">
@@ -1406,101 +1492,39 @@
     var major = iosParts[0], minor = iosParts[1], patch = iosParts[2] || 0;
     var isIphone = /iPhone/.test(ua);
     var doneSignal = false;
-    /* log UI disabled for now
-    var syslogPollTimer = null;
-    var lastSyslogText = '';
-    var seenDeviceLines = {};
-    var syslogCandidates = ['syslog.txt', '../syslog.txt', '/syslog.txt', '/lightsaber/syslog.txt'];
-    var activeSyslogPath = null;
 
-    function logAppend(text, cls) {
-      var el = document.getElementById('logScroll');
-      var line = document.createElement('div');
-      line.className = 'log-line' + (cls ? ' ' + cls : '');
-      line.textContent = text;
-      el.appendChild(line);
-      el.scrollTop = el.scrollHeight;
+    function openLogSheet() {
+      document.getElementById('logSheetBackdrop').className = 'log-sheet-backdrop active';
+      document.getElementById('logSheet').className = 'log-sheet active';
+      var body = document.getElementById('logSheetBody');
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function closeLogSheet() {
+      document.getElementById('logSheetBackdrop').className = 'log-sheet-backdrop';
+      document.getElementById('logSheet').className = 'log-sheet';
     }
 
     function classifyLogLine(text) {
       var msg = (text || '').toLowerCase();
-      if (msg.indexOf('mediaplaybackd') !== -1 || msg.indexOf('[pe]') !== -1 || msg.indexOf('pe-dbg') !== -1) return 'pe';
-      if (msg.indexOf('springboard') !== -1 || msg.indexOf('[fiveicon]') !== -1 || msg.indexOf('injectjs') !== -1) return 'springboard';
-      if (msg.indexOf('kernel') !== -1 || msg.indexOf('sbx0:') !== -1 || msg.indexOf('sbx1:') !== -1 || msg.indexOf('[mpd]') !== -1 || msg.indexOf('[profiler]') !== -1) return 'kernel';
-      if (msg.indexOf('webcontent') !== -1 || msg.indexOf('[msg]') !== -1) return 'device';
+      if (msg.indexOf('[pe]') !== -1 || msg.indexOf('pe-dbg') !== -1 || msg.indexOf('mediaplaybackd') !== -1) return 'pe';
+      if (msg.indexOf('[sbc]') !== -1 || msg.indexOf('[powercuff]') !== -1 || msg.indexOf('springboard') !== -1 || msg.indexOf('[fiveicon]') !== -1 || msg.indexOf('injectjs') !== -1) return 'springboard';
+      if (msg.indexOf('sbx0:') !== -1 || msg.indexOf('sbx1:') !== -1 || msg.indexOf('kernel') !== -1 || msg.indexOf('[mpd]') !== -1) return 'kernel';
+      if (msg.indexOf('[+]') !== -1 || msg.indexOf('success') !== -1 || msg.indexOf('complete') !== -1) return 'ok';
+      if (msg.indexOf('error') !== -1 || msg.indexOf('fail') !== -1 || msg.indexOf('[-]') !== -1) return 'err';
       return '';
     }
 
-    function appendSyslogText(fullText) {
-      if (!fullText) return;
-      var lines = fullText.split(/\r?\n/);
-      for (var i = 0; i < lines.length; i++) {
-        var line = lines[i];
-        if (!line) continue;
-        if (seenDeviceLines[line]) continue;
-        seenDeviceLines[line] = 1;
-        logAppend(line, classifyLogLine(line));
-      }
+    function logAppend(text, cls) {
+      var body = document.getElementById('logSheetBody');
+      var empty = document.getElementById('logSheetEmpty');
+      if (empty) empty.remove();
+      var line = document.createElement('div');
+      line.className = 'log-line' + (cls ? ' ' + cls : '');
+      line.textContent = text;
+      body.appendChild(line);
+      body.scrollTop = body.scrollHeight;
     }
-
-    function handleSyslogResponse(path, text) {
-      if (!text) return false;
-      if (!activeSyslogPath) {
-        activeSyslogPath = path;
-        logAppend('[UI] Using syslog source: ' + path, 'device');
-      }
-      if (text === lastSyslogText) return true;
-      if (!lastSyslogText || text.indexOf(lastSyslogText) !== 0) {
-        appendSyslogText(text);
-      } else {
-        appendSyslogText(text.slice(lastSyslogText.length));
-      }
-      lastSyslogText = text;
-      return true;
-    }
-
-    function tryPollSyslogAt(index) {
-      if (index >= syslogCandidates.length) return;
-      var path = syslogCandidates[index];
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', path + '?' + Date.now(), true);
-      xhr.onreadystatechange = function() {
-        if (xhr.readyState !== 4) return;
-        if (xhr.status >= 200 && xhr.status < 300) {
-          var text = xhr.responseText || '';
-          if (handleSyslogResponse(path, text)) return;
-        }
-        if (!activeSyslogPath) tryPollSyslogAt(index + 1);
-      };
-      try { xhr.send(null); } catch (e) {
-        if (!activeSyslogPath) tryPollSyslogAt(index + 1);
-      }
-    }
-
-    function pollSyslog() {
-      if (activeSyslogPath) {
-        tryPollSyslogAt(syslogCandidates.indexOf(activeSyslogPath) >= 0 ? syslogCandidates.indexOf(activeSyslogPath) : 0);
-      } else {
-        tryPollSyslogAt(0);
-      }
-    }
-
-    function startSyslogPolling() {
-      stopSyslogPolling();
-      lastSyslogText = '';
-      seenDeviceLines = {};
-      activeSyslogPath = null;
-      pollSyslog();
-      syslogPollTimer = setInterval(pollSyslog, 1000);
-    }
-
-    function stopSyslogPolling() {
-      if (syslogPollTimer) {
-        clearInterval(syslogPollTimer);
-        syslogPollTimer = null;
-      }
-    }
-    */
 
     var supportMsg = document.getElementById('supportMsg');
     var canRun = false;
@@ -1874,21 +1898,17 @@
       }
     }
 
-    // Mirrors the sbx0 printf-via-sandbox-deny breadcrumb that fires right
-    // after SBX0 lands (the last log line that reliably makes it out before
-    // Safari freezes during PE / SpringBoard injection). rce_loader.js
-    // forwards every worker 'log' postMessage to this window as
-    // {type:'lightsaber_log', text}, so we just substring match the stage
-    // tag and update the install card.
     function handleProgressLog(text) {
       if (!text || typeof text !== 'string') return;
-      if (text.indexOf('sbx0: [+] SBX0 complete') === -1) return;
-      var el = document.getElementById('installStatus');
-      if (!el) return;
-      if (el.dataset.sbxDone === '1') return;
-      el.dataset.sbxDone = '1';
-      el.classList.remove('error');
-      el.textContent = 'kernel exploit + sandbox escape underway, attempting install. Safari will freeze, wait ~30 more seconds to see if changes took hold';
+      logAppend(text, classifyLogLine(text));
+      if (text.indexOf('sbx0: [+] SBX0 complete') !== -1) {
+        var el = document.getElementById('installStatus');
+        if (el && el.dataset.sbxDone !== '1') {
+          el.dataset.sbxDone = '1';
+          el.classList.remove('error');
+          el.textContent = 'kernel exploit + sandbox escape underway, attempting install. Safari will freeze, wait ~30 more seconds to see if changes took hold';
+        }
+      }
     }
 
     window.addEventListener('message', function(event) {
@@ -1998,14 +2018,13 @@
         installStatusEl.dataset.sbxDone = '';
       }
 
-      /* log UI disabled for now
-      var lb = document.getElementById('logBox');
-      document.getElementById('logScroll').innerHTML = '';
-      lb.className = 'active';
-      logAppend('[UI] Worker log bridge armed', 'ok');
-      logAppend('[UI] Polling syslog.txt for device-side kernel / PE logs', 'device');
-      startSyslogPolling();
-      */
+      var logBody = document.getElementById('logSheetBody');
+      logBody.innerHTML = '';
+      var viewLogBtn = document.getElementById('viewLogBtn');
+      if (viewLogBtn) viewLogBtn.className = 'btn-view-log visible';
+      logAppend('[UI] Exploit chain started', 'ok');
+      logAppend('[UI] Tweaks: ' + tweaks.join(', '), '');
+      openLogSheet();
 
       // Match the upstream DarkSword install button: just a 60-second
       // setTimeout fallback plus a postMessage listener for the iframe's
