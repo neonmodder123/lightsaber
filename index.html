@@ -2198,7 +2198,9 @@
       if (stageSub) stageSub.textContent = 'Loading components...';
       var viewLogBtn = document.getElementById('viewLogBtn');
       if (viewLogBtn) viewLogBtn.className = 'btn-view-log visible';
-      logAppend('Starting install with: ' + tweaks.join(', '), 'ok');
+      var tweakDisplayNames = { fiveicon: 'SBCustomizer', powercuff: 'Powercuff', mgpatcher: 'MobileGestalt Patcher', applimit: '3-App Limit Bypass' };
+      var displayTweaks = tweaks.map(function(t) { return tweakDisplayNames[t] || t; });
+      logAppend('Starting install with: ' + displayTweaks.join(', '), 'ok');
       startLogWatchdog();
       openLogSheet();
 
