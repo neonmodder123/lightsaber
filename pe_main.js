@@ -8355,17 +8355,39 @@ class MigFilterBypass {
 		//Native.write64(threadMem, lock.kernelSlide);
 		//Native.write64(threadMem + 0x8n, lock.lockAddr);
 		//console.log(TAG, `Spawn bypass thread with args: kernelSlide=${Utils.hex(lock.kernelSlide)}, lockAddr=${Utils.hex(lock.lockAddr)}`);
-		const syslogShim = "(function(){var _cl=console.log;var _syslog=func_resolve('syslog');var _fmt=get_cstring('%s');console.log=function(){var s='';for(var i=0;i<arguments.length;i++){if(i>0)s+=' ';s+=String(arguments[i]);}try{fcall(_syslog,5,_fmt,get_cstring(s.length>1020?s.substring(0,1020):s),0,0,0,0,0);}catch(e){}_cl.apply(console,arguments);};})();";
-		const syslogTest = "console.log('[MIG-SYSLOG] shim active');";
-		const threadCode = "fcall_init(); " + syslogShim + syslogTest + _raw_loader_dist_MigFilterBypassThread_js__WEBPACK_IMPORTED_MODULE_9__["default"];
+		// Syslog shim: test whether func_resolve and syslog work, then
+		// override console.log so the 123 log calls in the MigFilterBypass
+		// webpack bundle reach idevicesyslog.
+		const syslogShim = [
+			"var __shim_ok=0;",
+			"try{",
+			"  var _syslog=func_resolve('syslog');",
+			"  var _fmt=get_cstring('%s');",
+			"  fcall(_syslog,5,_fmt,get_cstring('[MIG-THREAD] syslog shim init OK'),0,0,0,0,0);",
+			"  var _origLog=console.log;",
+			"  console.log=function(){",
+			"    var s='';for(var i=0;i<arguments.length;i++){if(i>0)s+=' ';s+=String(arguments[i]);}",
+			"    try{fcall(_syslog,5,_fmt,get_cstring(s.length>1020?s.substring(0,1020):s),0,0,0,0,0);}catch(e){}",
+			"    _origLog.apply(console,arguments);",
+			"  };",
+			"  __shim_ok=1;",
+			"}catch(e){",
+			"  try{var _s2=func_resolve('syslog');var _f2=get_cstring('%s');fcall(_s2,5,_f2,get_cstring('[MIG-THREAD] shim FAILED: '+String(e)),0,0,0,0,0);}catch(e2){}",
+			"}"
+		].join("");
+		const threadCode = "fcall_init(); " + syslogShim + _raw_loader_dist_MigFilterBypassThread_js__WEBPACK_IMPORTED_MODULE_9__["default"];
 		libs_Chain_Chain__WEBPACK_IMPORTED_MODULE_1__["default"].threadSpawn(threadCode, threadMem);
 
+		let migStarted = false;
 		for (let i=0; i<10; i++) {
 			let isRunning = libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"].read32(this.#isRunningPtr);
-			if (isRunning)
+			if (isRunning) {
+				migStarted = true;
 				break;
+			}
 			libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"].callSymbol("usleep", 500000);
 		}
+		LOG("[PE] MigFilterBypass thread " + (migStarted ? "started OK" : "FAILED to start (timeout after 5s)"));
 
 		this.#running = true;
 	}
