@@ -1560,22 +1560,17 @@
       { match: 'RCE success',           stage: 'rce2',  name: 'Code execution achieved',         sub: 'Moving to next stage',                                 log: 'Code execution achieved' },
       { match: 'check_dlopen',          stage: 'dyld',  name: 'Loading system libraries',        sub: 'Patching dyld for library access',                     log: 'Loading system libraries...' },
       { match: 'sign_pointers',         stage: 'dyld',  name: 'Signing function pointers',       sub: 'Bypassing pointer authentication' },
-      { match: 'inside setup_fcall',    stage: 'fcall', name: 'Setting up function calling',     sub: 'Preparing to call native functions',                   log: 'Preparing native function calling...' },
-      { match: '[SBX1] Stage 5',        stage: 'sbx1',  name: 'Sandbox escape in progress',      sub: 'Escaping WebKit sandbox (this can take a moment)',     log: 'Sandbox escape started...' },
-      { match: 'sbx0_main',             stage: 'sbx0',  name: 'Kernel exploit starting',         sub: 'Safari will freeze \u2014 this is normal',             log: 'Kernel exploit loading \u2014 Safari will freeze soon, this is normal' },
-      { match: 'SBX0 complete',         stage: 'sbx0ok', name: 'Kernel exploit succeeded',       sub: 'Injecting tweaks into system processes',               log: 'Kernel exploit succeeded \u2014 injecting tweaks' },
-      { match: 'ALL DONE',              stage: 'done',  name: 'Chain complete',                  sub: 'All stages finished',                                  log: 'All done!' },
+      { match: 'inside setup_fcall',    stage: 'fcall', name: 'Exploit chain running',            sub: 'Safari is about to freeze \u2014 this is a good sign', log: 'First phase of the exploit chain completed. Safari will freeze now \u2014 this means it\u2019s working.' },
     ];
 
-    // After the sbx0 fetch, Safari's main thread freezes — setTimeout
-    // won't fire either. We write all guidance to the DOM synchronously
-    // and use CSS animation-delay to reveal them on the compositor
-    // thread, which keeps running even when JS is blocked.
+    // After fcall setup, Safari's main thread freezes — no more JS runs.
+    // All guidance is written to the DOM synchronously and revealed via
+    // CSS animation-delay on the compositor thread.
     var freezeMessages = [
-      { delay: 3,  text: 'Safari is frozen \u2014 this is expected. The kernel exploit is running in the background.' },
-      { delay: 12, text: 'This usually takes 10\u201330 seconds. Keep Safari in the foreground.' },
-      { delay: 25, text: 'Safari will eventually crash or reload on its own. When it does, check if your changes took effect.' },
-      { delay: 40, text: 'Still frozen? Give it another 20 seconds. If Safari stays frozen past 60 seconds, force-quit it from the app switcher.' },
+      { delay: 3,  text: 'Safari is frozen \u2014 the sandbox escape and kernel exploit are running. This is expected.' },
+      { delay: 15, text: 'Keep Safari in the foreground. This usually takes 15\u201345 seconds.' },
+      { delay: 30, text: 'Safari will eventually crash or reload on its own. When it does, check if your changes took effect.' },
+      { delay: 45, text: 'Still frozen? Give it another 15 seconds. If Safari stays frozen past 60 seconds, force-quit it from the app switcher.' },
       { delay: 60, text: 'Force-quit Safari now, then check your home screen. If the tweaks didn\u2019t apply, reboot your device before retrying \u2014 this gives you a fresh kernel state and the cleanest chance of success.' },
     ];
 
@@ -1610,10 +1605,10 @@
             dot.className = 'log-stage-dot' + (rule.stage === 'done' ? ' done' : '');
           }
           if (rule.log) logAppend(rule.log, rule.stage === 'done' ? 'ok' : '');
-          // Once we hit sbx0 (kernel exploit load), write all freeze
-          // guidance to the DOM with CSS animation-delay so the
-          // compositor reveals them even while JS is frozen.
-          if (rule.stage === 'sbx0') writeFreezeHints();
+          // Once we hit fcall, Safari is about to freeze. Write all
+          // guidance to the DOM now with CSS animation-delay so the
+          // compositor reveals them even while JS is blocked.
+          if (rule.stage === 'fcall') writeFreezeHints();
           return;
         }
       }
@@ -1636,7 +1631,7 @@
       logWatchdog = setInterval(function() {
         if (doneSignal) { stopLogWatchdog(); return; }
         // Don't show watchdog hints once the freeze countdown is active
-        if (currentStage === 'sbx0') return;
+        if (currentStage === 'fcall') return;
         var elapsed = ((Date.now() - lastLogTime) / 1000) | 0;
         if (elapsed < 10) { watchdogTicks = 0; return; }
         watchdogTicks++;
@@ -2069,14 +2064,6 @@
       if ((lower.indexOf('error') !== -1 || lower.indexOf('exception') !== -1 || lower.indexOf('fetch failed') !== -1) && lower.indexOf('reporterror') === -1) {
         logAppend('Error: ' + text.replace(/^\[[^\]]*\]\s*/, ''), 'err');
         setStageError('Error encountered');
-      }
-      if (text.indexOf('sbx0: [+] SBX0 complete') !== -1) {
-        var el = document.getElementById('installStatus');
-        if (el && el.dataset.sbxDone !== '1') {
-          el.dataset.sbxDone = '1';
-          el.classList.remove('error');
-          el.textContent = 'Kernel exploit succeeded \u2014 injecting tweaks. Safari will freeze, wait ~30s';
-        }
       }
     }
 
