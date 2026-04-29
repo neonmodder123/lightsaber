@@ -1347,13 +1347,21 @@
   function pe() {
     LOG("[PE-DBG] pe() entered");
     let device_machine = get_device_machine();
-    if (strstr(device_machine, get_cstring("iPhone17,")) != 0n) {
+    LOG("[PE-DBG] device_machine ptr: " + device_machine.hex());
+    let a18_prefix_cmp = strncmp(device_machine, get_cstring("iPhone17,"), 9n);
+    LOG("[PE-DBG] iPhone17 prefix cmp: " + fmt(a18_prefix_cmp));
+    if (a18_prefix_cmp == 0n) {
+      LOG("[PE-DBG] A18 branch selected");
       LOG("[+] Running on A18 Devices");
       is_a18_devices = true;
+      LOG("[PE-DBG] A18 settle sleep begin");
       sleep(8n);
+      LOG("[PE-DBG] A18 settle sleep done; calling pe_init()");
       pe_init();
+      LOG("[PE-DBG] pe_init() done, about to call pe_v2()...");
       pe_v2();
     } else {
+      LOG("[PE-DBG] non-A18 branch selected");
       LOG("[+] Running on non-A18 Devices");
       pe_init();
       LOG("[PE-DBG] pe_init() done, about to call pe_v1()...");
