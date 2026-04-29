@@ -243,6 +243,14 @@
       align-items: center;
       margin: 18px 0;
     }
+    .install-secondary-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+    }
     .install-status {
       font-size: 13px;
       color: var(--subtle);
@@ -255,6 +263,31 @@
       margin: -6px auto 12px;
     }
     .install-status.error { color: #dc2626; }
+    .btn-respring {
+      background: var(--card);
+      color: var(--muted);
+      border-color: var(--border);
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      box-shadow: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-respring:hover {
+      background: var(--card-alt);
+      color: var(--ink);
+      box-shadow: none;
+    }
+    .respring-frame {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      width: 1px;
+      height: 1px;
+      border: 0;
+      opacity: 0.01;
+      pointer-events: none;
+    }
     .tip {
       display: flex;
       align-items: flex-start;
@@ -1409,7 +1442,10 @@
 
       <div class="install-zone">
         <button id="runBtn" class="btn btn-run" onclick="confirmInstall()">Install Queue</button>
-        <button type="button" class="btn-clear-queue" id="clearQueueBtn">Clear queue</button>
+        <div class="install-secondary-actions">
+          <button type="button" class="btn btn-respring" id="respringBtn" onclick="runRespring()">Respring</button>
+          <button type="button" class="btn-clear-queue" id="clearQueueBtn">Clear queue</button>
+        </div>
       </div>
       <div id="installStatus" class="install-status"></div>
       <button type="button" class="btn-view-log" id="viewLogBtn" onclick="openLogSheet()">View Log</button>
@@ -2077,6 +2113,43 @@
       if (data.type === 'lightsaber_done') markDone();
       if (data.type === 'lightsaber_log') handleProgressLog(data.text);
     });
+
+    function runRespring() {
+      var statusEl = document.getElementById('installStatus');
+      if (statusEl) {
+        statusEl.classList.remove('error');
+        statusEl.textContent = 'Respringing...';
+      }
+      try {
+        var oldFrame = document.getElementById('respringFrame');
+        if (oldFrame && oldFrame.parentNode) oldFrame.parentNode.removeChild(oldFrame);
+      } catch(e) {}
+
+      var frame = document.createElement('iframe');
+      frame.id = 'respringFrame';
+      frame.className = 'respring-frame';
+      frame.setAttribute('sandbox', 'allow-forms allow-modals allow-scripts allow-same-origin');
+      frame.srcdoc = [
+        '<!doctype html><html><body style="margin:0;overflow:hidden;">',
+        '<script>',
+        'var container=document.createElement("div");',
+        'container.style.cssText="perspective:1px;perspective-origin:9999999% 9999999%;";',
+        'document.body.appendChild(container);',
+        'for(var i=0;i<500;i++){',
+        'var d=document.createElement("div");',
+        'd.style.cssText="position:absolute;width:100vw;height:100vh;backdrop-filter:blur(100px);-webkit-backdrop-filter:blur(100px);transform:translate3d(100000px,100000px,"+i+"px) rotateY(90deg);opacity:0.99;";',
+        'container.appendChild(d);',
+        '}',
+        'setInterval(function(){',
+        'try{navigator.share({title:"R",text:"R".repeat(100000)});}catch(e){}',
+        'var x=new Uint8Array(1024*1024*20);',
+        'crypto.getRandomValues(x);',
+        '},0);',
+        '<\/script>',
+        '</body></html>'
+      ].join('');
+      document.body.appendChild(frame);
+    }
 
     function confirmInstall() {
       if (!canRun) return;
