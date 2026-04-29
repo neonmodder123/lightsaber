@@ -6520,9 +6520,17 @@
     uwrite64(final_fcall_buf_local + 0x28n, 0xcafedeadn);
     uwrite64(nativefcall_buf_local, pacia(self_loop, 0n));
     uwrite64(surface_address, pacia(init_fcall, 0n));
-    while (uread64(final_fcall_buf_local + 0x28n) == 0xcafedeadn) {
-      usleep(1n);
+    {
+      const init_start = Date.now();
+      while (uread64(final_fcall_buf_local + 0x28n) == 0xcafedeadn) {
+        usleep(1n);
+        if (Date.now() - init_start > 10000) {
+          LOG("[x] setup_nativefcall_fcall timed out after 10s - remote process likely crashed");
+          return false;
+        }
+      }
     }
+    return true;
   }
   function reset_nativefcall(surface, x0_remote) {
     uwrite64(surface_address, pacia(self_loop, 0n));

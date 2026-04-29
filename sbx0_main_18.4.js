@@ -7,7 +7,8 @@
     dlopen,
     dlsym,
     device_model,
-    chipset
+    chipset,
+    sbx0_fallback_start = 0
   } = p;
   const libsystem_kernel = dlopen('/usr/lib/system/libsystem_kernel.dylib', 1n);
   const libsystem_platform = dlopen('/usr/lib/system/libsystem_platform.dylib', 1n);
