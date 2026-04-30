@@ -1771,6 +1771,7 @@
       // Sync queue button state
       var btn = el.querySelector('.tweak-queue-btn[data-cb="' + row.cbId + '"]');
       if (btn) {
+        if (cb.disabled) { btn.textContent = 'OFF'; btn.classList.remove('queued'); return; }
         if (cb.checked) { btn.textContent = 'QUEUED'; btn.classList.add('queued'); }
         else { btn.textContent = 'GET'; btn.classList.remove('queued'); }
       }
