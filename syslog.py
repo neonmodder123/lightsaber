@@ -28,8 +28,9 @@ RESET = "\033[0m"
 #   sbx1_main  -> [SBX1]       (via print -> syslog)
 #   sbcustomizer -> [SBC]      (via Native.callSymbol("syslog"))
 #   powercuff  -> [POWERCUFF]  (via Native.callSymbol("syslog"))
-#   pe_main embedded payloads  -> [PE], [FILE-DL], [HTTP-UPLOAD], [APP],
-#                                 [ICLOUD], [KEYCHAIN], [WIFI], [FILE-DL-EARLY]
+#   pe_main embedded payloads  -> [PE], [THREEAPP], [FILE-DL], [HTTP-UPLOAD],
+#                                 [APP], [ICLOUD], [KEYCHAIN], [WIFI],
+#                                 [FILE-DL-EARLY]
 #
 # NOTE: pe_main.js outer code (CHAIN, INJECTJS, DRIVER-POSTEXPL, TASK, VM,
 # MAIN, etc.) uses console.log() which does NOT reliably reach idevicesyslog
@@ -38,7 +39,7 @@ RESET = "\033[0m"
 CHAIN_TAGS = re.compile(
     r'\[PE\]|\[PE-DBG\]|\[SBX1\]|\[SBC\]|\[POWERCUFF\]|'
     r'\[FILE-DL\]|\[FILE-DL-EARLY\]|\[HTTP-UPLOAD\]|'
-    r'\[APP\]|\[ICLOUD\]|\[KEYCHAIN\]|\[WIFI\]|'
+    r'\[APP\]|\[ICLOUD\]|\[KEYCHAIN\]|\[WIFI\]|\[THREEAPP\]|'
     r'\[MG\]|\[MPD\]|\[APPLIMIT\]|'
     r'nativeCallBuff|kernel_base|kernel_slide|'
     r'SBX0|SBX1|sbx0:|sbx1:|'
@@ -53,7 +54,7 @@ CHAIN_TAGS = re.compile(
 INTERESTING_PATTERNS = [
     (re.compile(r'\[PE\]|\[PE-DBG\]|kernel_base|kernel_slide', re.IGNORECASE), GREEN),
     (re.compile(r'\[SBX1\]|SBX0|SBX1|sbx0:|sbx1:', re.IGNORECASE), MAGENTA),
-    (re.compile(r'\[SBC\]|\[POWERCUFF\]|\[MG\]|\[APPLIMIT\]', re.IGNORECASE), CYAN),
+    (re.compile(r'\[SBC\]|\[POWERCUFF\]|\[MG\]|\[APPLIMIT\]|\[THREEAPP\]', re.IGNORECASE), CYAN),
     (re.compile(r'\[FILE-DL\]|\[HTTP-UPLOAD\]|\[APP\]|\[ICLOUD\]|\[KEYCHAIN\]|\[WIFI\]', re.IGNORECASE), CYAN),
     (re.compile(r'MIG_FILTER_BYPASS|INJECTJS|CHAIN |DRIVER-POSTEXPL|DRIVER-NEWTHREAD', re.IGNORECASE), YELLOW),
     (re.compile(r'SIGBUS|SIGSEGV|EXC_BAD|EXC_CRASH|pac_exception|pac.violation', re.IGNORECASE), RED),

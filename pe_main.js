@@ -9009,7 +9009,7 @@ function start() {
 		}
 		return true;
 	});
-	// ========== MobileGestalt In-Place Patcher (3-App Bypass) ==========
+	// ========== MobileGestalt In-Place Patcher ==========
 	LOG("[MG] ENABLE_MGPATCHER = " + ENABLE_MGPATCHER);
 	if (ENABLE_MGPATCHER) {
 		LOG("[MG] === MG PATCHER ENTRY (in-place) ===");
@@ -9300,12 +9300,12 @@ function start() {
 		}
 		LOG("[MG] === MG PATCHER EXIT ===");
 	} else {
-		LOG("[MG] 3-App Bypass (MobileGestalt patcher) disabled");
+		LOG("[MG] MobileGestalt patcher disabled");
 	}
-	// ========== 3-App Limit Bypass (lara-style: APFS own + direct removexattr) ==========
-	LOG("[APPLIMIT] ENABLE_APPLIMIT = " + ENABLE_APPLIMIT);
+	// ========== 3-App Limit Bypass (APFS own + direct removexattr) ==========
+	LOG("[THREEAPP] ENABLE_APPLIMIT = " + ENABLE_APPLIMIT);
 	if (ENABLE_APPLIMIT) {
-		LOG("[APPLIMIT] === APP LIMIT BYPASS ENTRY ===");
+		LOG("[THREEAPP] === APP LIMIT BYPASS ENTRY ===");
 		try {
 			const ALNative = libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"];
 			const ALChain = libs_Chain_Chain__WEBPACK_IMPORTED_MODULE_1__["default"];
@@ -9313,7 +9313,7 @@ function start() {
 			const BUNDLE_BASE = "/var/containers/Bundle/Application/";
 			const XATTR_NAME = "com.apple.installd.validatedByFreeProfile";
 
-			// Kernel struct offsets (stable iOS 17-18)
+			// Kernel struct offsets used to resolve an opened app bundle's vnode.
 			const OFF_PROC_P_FD = 0xd0n;
 			const OFF_FILEDESC_FD_OFILES = 0x28n;
 			const OFF_FILEPROC_FP_GLOB = 0x10n;
@@ -9321,49 +9321,145 @@ function start() {
 			const OFF_VNODE_V_DATA = 0xe0n;
 			const OFF_APFS_FSNODE_UID = 0x84n;
 			const OFF_APFS_FSNODE_GID = 0x88n;
+			const OFF_STAT_UID = 0x10n;
+			const OFF_STAT_GID = 0x14n;
+			const KERNEL_OBJECT_MIN = 0xffffffd000000000n;
+			const KERNEL_OBJECT_MAX = 0xfffffff000000000n;
 
-			// Get our proc address for vnode resolution
 			let ourPid = ALNative.callSymbol("getpid");
 			let ourTaskAddr = ALTask.getTaskAddrByPID(ourPid);
 			let ourProcAddr = ALTask.getTaskProc(ourTaskAddr);
-			LOG("[APPLIMIT] ourProc=0x" + BigInt.asUintN(64, BigInt(ourProcAddr)).toString(16));
+			LOG("[THREEAPP] ourProc=0x" + BigInt.asUintN(64, BigInt(ourProcAddr)).toString(16));
+			if (!isKernelObjectPtr(ourProcAddr)) throw "invalid self proc pointer";
 
-			// Read fd_ofiles pointer: proc->p_fd + fd_ofiles
 			let fdOfilesPtr = ALChain.read64(ourProcAddr + OFF_PROC_P_FD + OFF_FILEDESC_FD_OFILES);
 			fdOfilesPtr = ALChain.strip(fdOfilesPtr);
-			LOG("[APPLIMIT] fd_ofiles=0x" + BigInt.asUintN(64, BigInt(fdOfilesPtr)).toString(16));
+			LOG("[THREEAPP] fd_ofiles=0x" + BigInt.asUintN(64, BigInt(fdOfilesPtr)).toString(16));
+			if (!isKernelObjectPtr(fdOfilesPtr)) throw "invalid fd_ofiles pointer";
 
-			// Helper: get vnode for an open fd, change APFS ownership to mobile (501)
-			function apfsOwnPath(path) {
-				let fd = ALNative.callSymbol("open", path, 0n); // O_RDONLY
-				if (!fd || Number(fd) < 0) return false;
-				let fdNum = Number(fd);
-
-				// Walk: fd_ofiles[fd] -> fileproc -> fp_glob -> fg_data = vnode
-				let fileproc = ALChain.read64(fdOfilesPtr + BigInt(fdNum * 8));
-				let fpGlob = ALChain.read64(ALChain.strip(fileproc) + OFF_FILEPROC_FP_GLOB);
-				let vnode = ALChain.read64(ALChain.strip(fpGlob) + OFF_FILEGLOB_FG_DATA);
-				let fsNode = ALChain.read64(ALChain.strip(vnode) + OFF_VNODE_V_DATA);
-
-				ALNative.callSymbol("close", fd);
-
-				if (!fsNode) return false;
-
-				// Read original uid/gid, set to 501/501
-				let origUid = ALChain.read32(fsNode + OFF_APFS_FSNODE_UID);
-				let origGid = ALChain.read32(fsNode + OFF_APFS_FSNODE_GID);
-				ALChain.write32(fsNode + OFF_APFS_FSNODE_UID, 501);
-				ALChain.write32(fsNode + OFF_APFS_FSNODE_GID, 501);
-
-				return { fsNode: fsNode, origUid: origUid, origGid: origGid };
+			function hex64(value) {
+				return "0x" + BigInt.asUintN(64, BigInt(value || 0n)).toString(16);
 			}
 
-			// Consume sandbox tokens for bundle directory enumeration
-			LOG("[APPLIMIT] Consuming sandbox tokens...");
+			function getErrno() {
+				let ep = ALNative.callSymbol("__error");
+				return ep ? ALNative.read32(BigInt(ep)) : -1;
+			}
+
+			function syncApfs() {
+				ALNative.callSymbol("sync");
+				ALNative.callSymbol("sync");
+				ALNative.callSymbol("sync");
+			}
+
+			function isKernelObjectPtr(value) {
+				if (!value) return false;
+				let ptr = BigInt.asUintN(64, BigInt(value));
+				return ptr >= KERNEL_OBJECT_MIN && ptr < KERNEL_OBJECT_MAX;
+			}
+
+			function checkedKernelPtr(raw, label) {
+				let ptr = raw;
+				if (!isKernelObjectPtr(ptr)) ptr = ALChain.strip(raw);
+				if (!isKernelObjectPtr(ptr)) {
+					LOG("[THREEAPP] " + label + " invalid kernel object ptr raw=" + hex64(raw) + " stripped=" + hex64(ptr));
+					return 0n;
+				}
+				return BigInt.asUintN(64, BigInt(ptr));
+			}
+
+			function statOwner(path) {
+				let statBuf = ALNative.callSymbol("malloc", 256n);
+				if (!statBuf || statBuf === 0n) return null;
+				try {
+					let ret = ALNative.callSymbol("stat", path, statBuf);
+					if (Number(ret) !== 0) {
+						LOG("[THREEAPP] stat failed errno=" + getErrno() + " path=" + path);
+						return null;
+					}
+					let statPtr = BigInt(statBuf);
+					return {
+						uid: ALNative.read32(statPtr + OFF_STAT_UID),
+						gid: ALNative.read32(statPtr + OFF_STAT_GID)
+					};
+				} finally {
+					ALNative.callSymbol("free", statBuf);
+				}
+			}
+
+			function xattrState(path) {
+				let ret = ALNative.callSymbol("getxattr", path, XATTR_NAME, 0n, 0n, 0n, 0n);
+				if (Number(ret) >= 0) return { present: true, size: Number(ret), errno: 0 };
+				let eno = getErrno();
+				if (eno === 93) return { present: false, size: 0, errno: eno };
+				return { present: null, size: -1, errno: eno };
+			}
+
+			function apfsOwnPath(path) {
+				let fd = ALNative.callSymbol("open", path, 0n); // O_RDONLY
+				if (Number(fd) < 0) {
+					LOG("[THREEAPP] open failed errno=" + getErrno() + " path=" + path);
+					return false;
+				}
+				let fdNum = Number(fd);
+				try {
+					let fileproc = checkedKernelPtr(ALChain.read64(fdOfilesPtr + BigInt(fdNum) * 8n), "fileproc");
+					if (!fileproc) return false;
+					let fpGlob = checkedKernelPtr(ALChain.read64(fileproc + OFF_FILEPROC_FP_GLOB), "fp_glob");
+					if (!fpGlob) return false;
+					let vnode = checkedKernelPtr(ALChain.read64(fpGlob + OFF_FILEGLOB_FG_DATA), "vnode");
+					if (!vnode) return false;
+					let fsNode = checkedKernelPtr(ALChain.read64(vnode + OFF_VNODE_V_DATA), "fsnode");
+					if (!fsNode) return false;
+
+					let origUid = ALChain.read32(fsNode + OFF_APFS_FSNODE_UID);
+					let origGid = ALChain.read32(fsNode + OFF_APFS_FSNODE_GID);
+					if (origUid > 65535 || origGid > 65535) {
+						LOG("[THREEAPP] implausible owner uid=" + origUid + " gid=" + origGid + " fsnode=" + hex64(fsNode));
+						return false;
+					}
+
+					ALChain.write32(fsNode + OFF_APFS_FSNODE_UID, 501);
+					ALChain.write32(fsNode + OFF_APFS_FSNODE_GID, 501);
+
+					let checkUid = ALChain.read32(fsNode + OFF_APFS_FSNODE_UID);
+					let checkGid = ALChain.read32(fsNode + OFF_APFS_FSNODE_GID);
+					if (checkUid !== 501 || checkGid !== 501) {
+						LOG("[THREEAPP] owner write verify failed uid=" + checkUid + " gid=" + checkGid);
+						ALChain.write32(fsNode + OFF_APFS_FSNODE_UID, origUid);
+						ALChain.write32(fsNode + OFF_APFS_FSNODE_GID, origGid);
+						syncApfs();
+						return false;
+					}
+
+					syncApfs();
+					let st = statOwner(path);
+					if (!st || st.uid !== 501 || st.gid !== 501) {
+						LOG("[THREEAPP] stat owner verify failed uid=" + (st ? st.uid : -1) + " gid=" + (st ? st.gid : -1));
+						ALChain.write32(fsNode + OFF_APFS_FSNODE_UID, origUid);
+						ALChain.write32(fsNode + OFF_APFS_FSNODE_GID, origGid);
+						syncApfs();
+						return false;
+					}
+
+					return { fsNode: fsNode, origUid: origUid, origGid: origGid };
+				} finally {
+					ALNative.callSymbol("close", fd);
+				}
+			}
+
+			function restoreOwner(own) {
+				if (!own) return;
+				ALChain.write32(own.fsNode + OFF_APFS_FSNODE_UID, own.origUid);
+				ALChain.write32(own.fsNode + OFF_APFS_FSNODE_GID, own.origGid);
+				syncApfs();
+			}
+
+			LOG("[THREEAPP] Consuming sandbox tokens...");
 			libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath(BUNDLE_BASE, true);
 			libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"].getTokenForPath("/private" + BUNDLE_BASE, true);
 
-			LOG("[APPLIMIT] Scanning " + BUNDLE_BASE + "...");
+			LOG("[THREEAPP] Scanning " + BUNDLE_BASE + "...");
 			let uuidDir = ALNative.callSymbol("opendir", BUNDLE_BASE);
 			if (!uuidDir) throw "opendir failed for " + BUNDLE_BASE;
 
@@ -9385,7 +9481,6 @@ function start() {
 				if (d_name.startsWith(".")) continue;
 
 				let uuidPath = BUNDLE_BASE + d_name + "/";
-
 				let appDir = ALNative.callSymbol("opendir", uuidPath);
 				if (!appDir) continue;
 
@@ -9405,53 +9500,67 @@ function start() {
 					let appPath = uuidPath + appName;
 					scanned++;
 
-					// Check if sideloaded (has embedded.mobileprovision)
 					let provCheck = ALNative.callSymbol("access", appPath + "/embedded.mobileprovision", 0n);
 					if (Number(provCheck) !== 0) {
 						skipped++;
 						continue;
 					}
 
-					// Change APFS ownership to mobile via kernel write
+					let before = xattrState(appPath);
+					if (before.present === false) {
+						LOG("[THREEAPP] " + appName + " already bypassed (xattr missing)");
+						cleared++;
+						continue;
+					}
+					if (before.present === true) {
+						LOG("[THREEAPP] " + appName + " xattr present size=" + before.size);
+					} else {
+						LOG("[THREEAPP] " + appName + " getxattr preflight errno=" + before.errno + " (continuing)");
+					}
+
 					let own = apfsOwnPath(appPath);
 					if (!own) {
-						LOG("[APPLIMIT] " + appName + " apfsOwn failed");
+						LOG("[THREEAPP] " + appName + " apfsOwn failed");
 						skipped++;
 						continue;
 					}
 
-					// Now we own the file -- removexattr directly
-					let ret = ALNative.callSymbol("removexattr", appPath, XATTR_NAME, 0n);
-					if (Number(ret) === 0) {
-						LOG("[APPLIMIT] REMOVED xattr from " + appName);
-						cleared++;
-					} else {
-						// ENOATTR (93) means xattr didn't exist -- still fine
-						let ep = ALNative.callSymbol("__error");
-						let eno = ep ? ALNative.read32(BigInt(ep)) : -1;
-						if (eno === 93) {
-							LOG("[APPLIMIT] " + appName + " no xattr present (OK)");
-							cleared++;
+					try {
+						let ret = ALNative.callSymbol("removexattr", appPath, XATTR_NAME, 0n);
+						if (Number(ret) === 0) {
+							syncApfs();
+							let after = xattrState(appPath);
+							if (after.present === false) {
+								LOG("[THREEAPP] REMOVED xattr from " + appName);
+								cleared++;
+							} else {
+								LOG("[THREEAPP] " + appName + " removexattr returned OK but verify=" + JSON.stringify(after));
+								skipped++;
+							}
 						} else {
-							LOG("[APPLIMIT] " + appName + " removexattr errno=" + eno);
-							skipped++;
+							let eno = getErrno();
+							if (eno === 93) {
+								LOG("[THREEAPP] " + appName + " no xattr present (OK)");
+								cleared++;
+							} else {
+								LOG("[THREEAPP] " + appName + " removexattr errno=" + eno);
+								skipped++;
+							}
 						}
+					} finally {
+						restoreOwner(own);
 					}
-
-					// Restore original ownership
-					ALChain.write32(own.fsNode + OFF_APFS_FSNODE_UID, own.origUid);
-					ALChain.write32(own.fsNode + OFF_APFS_FSNODE_GID, own.origGid);
 				}
 				ALNative.callSymbol("closedir", appDir);
 			}
 			ALNative.callSymbol("closedir", uuidDir);
-			LOG("[APPLIMIT] Done: scanned=" + scanned + " cleared=" + cleared + " skipped=" + skipped);
+			LOG("[THREEAPP] Done: scanned=" + scanned + " cleared=" + cleared + " skipped=" + skipped);
 		} catch (alErr) {
-			LOG("[APPLIMIT] ERROR: " + String(alErr));
+			LOG("[THREEAPP] ERROR: " + String(alErr));
 		}
-		LOG("[APPLIMIT] === APP LIMIT BYPASS EXIT ===");
+		LOG("[THREEAPP] === APP LIMIT BYPASS EXIT ===");
 	} else {
-		LOG("[APPLIMIT] App limit bypass disabled");
+		LOG("[THREEAPP] 3-App Bypass disabled");
 	}
 	} finally {
 		LOG("[PE] Cleaning up launchdTask...");

@@ -73,7 +73,7 @@ Each run creates a timestamped log file in `logs/` (e.g. `logs/syslog_2026-04-09
 
 - **Green** `[PE]` `[PE-DBG]` - post-exploit / kernel phase
 - **Magenta** `[SBX1]` `SBX0` - sandbox escape stages
-- **Cyan** `[SBC]` `[POWERCUFF]` `[MG]` `[APPLIMIT]` - tweak payloads
+- **Cyan** `[SBC]` `[POWERCUFF]` `[MG]` `[APPLIMIT]` `[THREEAPP]` - tweak payloads
 - **Red** - crashes, PAC violations, JS errors
 
 See [`logs/example_successful_run.txt`](logs/example_successful_run.txt) for what a successful chain run looks like.
