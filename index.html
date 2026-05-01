@@ -825,6 +825,49 @@
       .log-phase.active .log-phase-bar { animation: none; }
       .log-phase-strip.is-frozen .log-phase .log-phase-bar { animation: none; }
     }
+    /* Frozen-phase explainer. Appears only while .is-frozen is on the strip,
+       directly below it: animated [ ... ] brackets pulsing in opposite phase
+       around a short blurb explaining that phases 3–5 can't post logs while
+       WebKit is frozen, but the chain is still progressing. */
+    .log-phase-frozen-note {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 18px 10px;
+      background: rgba(245, 158, 11, 0.08);
+      border-bottom: 1px solid rgba(180, 83, 9, 0.22);
+      font-size: 0.66rem;
+      font-weight: 600;
+      color: #b45309;
+      line-height: 1.4;
+    }
+    .log-phase-strip.is-frozen + .log-phase-frozen-note {
+      display: flex;
+      animation: frozenNoteIn 0.45s var(--ease-out);
+    }
+    @keyframes frozenNoteIn {
+      from { opacity: 0; transform: translateY(-3px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .frozen-bracket {
+      flex-shrink: 0;
+      width: 9px;
+      height: 18px;
+      border: 1.5px solid #b45309;
+      border-radius: 1px;
+      animation: frozenBracketPulse 1.4s ease-in-out infinite;
+    }
+    .frozen-bracket-l { border-right: none; }
+    .frozen-bracket-r { border-left: none; animation-delay: 0.7s; }
+    @keyframes frozenBracketPulse {
+      0%, 100% { opacity: 1; transform: scaleY(1); }
+      50%      { opacity: 0.45; transform: scaleY(0.78); }
+    }
+    .frozen-note-text { flex: 1; text-align: center; }
+    @media (prefers-reduced-motion: reduce) {
+      .frozen-bracket { animation: none; }
+      .log-phase-strip.is-frozen + .log-phase-frozen-note { animation: none; }
+    }
     /* Expected-behavior callout. Hidden by default; pops during freeze /
        cache-cleanup / Safari-kill phases since those are the counter-intuitive
        "this looks wrong but means the chain is working" moments. */
@@ -1791,6 +1834,11 @@
           <div class="log-phase" data-phase="4"><div class="log-phase-bar"></div><div class="log-phase-label">Cleanup</div></div>
           <div class="log-phase" data-phase="5"><div class="log-phase-bar"></div><div class="log-phase-label">Apply</div></div>
         </div>
+        <div class="log-phase-frozen-note" id="logPhaseFrozenNote" aria-live="polite">
+          <span class="frozen-bracket frozen-bracket-l" aria-hidden="true"></span>
+          <span class="frozen-note-text">These phases can&rsquo;t reliably post logs while WebKit is frozen &mdash; chain should still be progressing in the background.</span>
+          <span class="frozen-bracket frozen-bracket-r" aria-hidden="true"></span>
+        </div>
         <div class="log-expected-callout" id="logExpectedCallout" role="status" aria-live="polite">
           <span class="callout-badge">Expected</span>
           <span class="callout-text" id="logExpectedCalloutText"></span>
@@ -1840,7 +1888,7 @@
       <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> &mdash; UI suggestions
     </div>
 
-    <p class="version">v0.0.114</p>
+    <p class="version">v0.0.115</p>
   </div>
 
   <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
