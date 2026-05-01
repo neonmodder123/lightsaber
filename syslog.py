@@ -129,7 +129,7 @@ def reader(proc, outfile):
 def main():
     from datetime import datetime
 
-    logdir = Path(__file__).resolve().parent / "logs"
+    logdir = Path(__file__).resolve().parent / "lightsaber-logs"
     logdir.mkdir(exist_ok=True)
 
     if len(sys.argv) > 1:
