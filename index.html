@@ -581,20 +581,18 @@
       margin-top: 1px;
     }
     .log-sheet-body {
-      flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
       background: var(--card);
-      padding: 6px 18px 16px;
-      min-height: 118px;
+      padding: 6px 18px 12px;
       max-height: min(240px, 34dvh);
     }
     .log-sheet-empty {
       font-size: 0.78rem;
       color: var(--subtle);
       text-align: center;
-      padding: 32px 0;
+      padding: 14px 0;
     }
     .log-line {
       font-size: 0.76rem;
@@ -700,6 +698,7 @@
       border: 1px solid #f5c26b;
       border-radius: 12px;
     }
+    .run-expectations.hidden { display: none; }
     .run-expectations-title {
       font-size: 0.74rem;
       font-weight: 800;
@@ -788,7 +787,6 @@
       font-family: inherit;
     }
     #rawLogScroll {
-      min-height: 118px;
       max-height: min(260px, 38dvh);
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
@@ -806,7 +804,7 @@
       padding: 1px 0;
     }
     .raw-log-empty {
-      padding: 24px 0;
+      padding: 12px 0;
       text-align: center;
       color: #6f6f75;
     }
@@ -1747,7 +1745,7 @@
       <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> &mdash; UI suggestions
     </div>
 
-    <p class="version">v0.0.105</p>
+    <p class="version">v0.0.106</p>
   </div>
 
   <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
@@ -2769,8 +2767,14 @@
       if (dot) dot.className = 'log-stage-dot';
       if (stageText) stageText.textContent = 'Starting exploit chain';
       if (stageSub) stageSub.textContent = 'Loading components...';
+      // The activity log sits inline directly below the install button now,
+      // so the legacy "View Log" jump link is redundant during a run.
       var viewLogBtn = document.getElementById('viewLogBtn');
-      if (viewLogBtn) viewLogBtn.className = 'btn-view-log visible';
+      if (viewLogBtn) viewLogBtn.className = 'btn-view-log';
+      // Hide the static "What to expect" panel — its content is now shown
+      // live in the activity log via the phase strip and Expected callout.
+      var runExpEl = document.getElementById('runExpectations');
+      if (runExpEl) runExpEl.classList.add('hidden');
       var tweakDisplayNames = { fiveicon: 'SBCustomizer', powercuff: 'Powercuff', mgpatcher: 'MobileGestalt Patcher', applimit: '3-App Limit Bypass' };
       var displayTweaks = tweaks.map(function(t) { return tweakDisplayNames[t] || t; });
       rawLogAppend('[UI] Raw WebContent log armed', 'ok');
