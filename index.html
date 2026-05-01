@@ -919,22 +919,11 @@
       padding: 8px 12px;
       background: #1a1a1c;
       border-top: 1px solid #2c2c2e;
-      /* Force a stable GPU layer for the scroll content. Replaces the
-         deprecated -webkit-overflow-scrolling: touch which on iOS Safari
-         had a long-standing content-recycling bug — lines appended while
-         the parent process was busy (or while WebKit was frozen during
-         the chain) would drop their paint when the user scrolled back
-         up to read them, showing as blank. translateZ(0) keeps the
-         layer composited cleanly, and contain: paint scopes paint
-         invalidations to this box so heavy main-thread work in the
-         iframe doesn't corrupt the scrolled-off content. */
-      transform: translateZ(0);
-      contain: paint;
-    }
-    .raw-log-line {
-      /* Promote each line to its own paint boundary so scrolled-off
-         lines retain their text after the freeze. */
-      contain: layout paint;
+      /* No GPU-layer or containment hints here. translateZ(0) and
+         contain: paint were tried as a fix for the "blank-on-scroll"
+         bug, but on iOS Safari they let the compositor skip painting
+         off-screen content and made things worse. Plain CPU scrolling
+         re-paints every visible line on scroll, which is what we want. */
     }
     .raw-log-empty,
     .raw-log-line {
@@ -1856,7 +1845,7 @@
       <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> &mdash; UI suggestions
     </div>
 
-    <p class="version">v0.0.123</p>
+    <p class="version">v0.0.124</p>
   </div>
 
   <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
@@ -2003,7 +1992,7 @@
     var RAW_LOG_STORE_KEY = 'ls_raw_log_lines_v1';
     var RAW_LOG_ACTIVE_KEY = 'ls_raw_log_active_v1';
     var RAW_LOG_STORE_LIMIT = 260;
-    var RAW_LOG_DOM_LIMIT = 600;
+    var RAW_LOG_DOM_LIMIT = 350;
     // Sticky-bottom behavior: autoscroll on each new line ONLY while the
     // user is already pinned at (or near) the bottom of the scroll. As soon
     // as they scroll up to read history, autoscroll pauses so we don't
@@ -2290,21 +2279,27 @@
     function rawLogAppend(text, cls, skipStore) {
       var el = document.getElementById('rawLogScroll');
       if (!el) return;
+      // Drop empty / whitespace-only messages so we never inject a blank
+      // div into the scroll. Some iframe paths emit zero-length entries
+      // when a stage has nothing to print, and those rendered as
+      // 2px-tall blanks that the user read as "blank lines on scroll".
+      var s = (text == null) ? '' : String(text);
+      if (!s.replace(/\s+/g, '').length) return;
       var empty = document.getElementById('rawLogEmpty');
       if (empty && empty.parentNode) empty.parentNode.removeChild(empty);
       var line = document.createElement('div');
       line.className = 'raw-log-line' + (cls ? ' ' + cls : '');
-      line.textContent = (text == null) ? '' : String(text);
+      line.textContent = s;
       el.appendChild(line);
-      // Cap DOM line count so very long runs don't accumulate thousands of
-      // nodes and trigger iOS Safari rendering glitches on scroll.
+      // Cap DOM line count to keep the total scroll height modest. iOS
+      // Safari's painter reliably re-paints visible lines on scroll, but
+      // beyond a few thousand pixels of scroll content it starts dropping
+      // tiles under memory pressure.
       while (el.children.length > RAW_LOG_DOM_LIMIT) el.removeChild(el.firstChild);
       // Batch scroll-to-bottom into a single rAF callback so a burst of
-      // lines doesn't thrash scrollTop on every append — that thrash is
-      // what corrupted the GPU layer on iOS Safari and made earlier lines
-      // look blank when scrolled back to.
+      // lines doesn't thrash scrollTop on every append.
       if (rawLogStickyBottom) scheduleRawLogScrollToBottom();
-      if (!skipStore) rawLogStoreLine(text, cls);
+      if (!skipStore) rawLogStoreLine(s, cls);
     }
 
     // Watch the scroll position so manual scroll-up disables autoscroll
