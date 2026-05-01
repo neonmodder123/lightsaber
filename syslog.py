@@ -143,6 +143,22 @@ def main():
         outpath = logdir / f"syslog_{stamp}.txt"
 
     try:
+        ids = subprocess.run(
+            ["idevice_id", "-l"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except FileNotFoundError:
+        print("idevice_id not found. Install with: brew install libimobiledevice")
+        sys.exit(1)
+    except subprocess.TimeoutExpired:
+        print("idevice_id timed out. Is usbmuxd running? Try replugging the device.")
+        sys.exit(1)
+
+    if not ids.stdout.strip():
+        print("No iPhone detected. Plug in via USB, unlock the device, and tap 'Trust this computer'.")
+        sys.exit(1)
+
+    try:
         proc = subprocess.Popen(
             ["idevicesyslog"],
             stdout=subprocess.PIPE,
