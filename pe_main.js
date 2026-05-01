@@ -8990,10 +8990,11 @@ function terminateSafariAfterClean(remoteKillTask) {
 		const MAX_CONTENT_SCAN_BYTES_PER_FILE = 64 * 1024;
 		const MAX_TOTAL_CONTENT_SCAN_BYTES = 4 * 1024 * 1024;
 		const MAX_DELETE_TREE_ENTRIES = 900;
-		const MAX_PRIORITY_NETWORK_RECORDS = 90;
-		const MAX_PRIORITY_NETWORK_FILES = 120;
-		const MAX_PRIORITY_NETWORK_BYTES = 768 * 1024;
-		const MAX_PRIORITY_NETWORK_BYTES_PER_FILE = 8 * 1024;
+		const MAX_PRIORITY_NETWORK_RECORDS = 180;
+		const MAX_PRIORITY_NETWORK_FILES = 260;
+		const MAX_PRIORITY_NETWORK_BYTES = 24 * 1024 * 1024;
+		const MAX_PRIORITY_NETWORK_BYTES_PER_FILE = 1024 * 1024;
+		const MAX_PRIORITY_NETWORK_FILES_PER_RECORD = 64;
 		const MAX_PRIORITY_DEFAULT_DIRS = 80;
 	const tokenPaths = [
 		"/private/var/mobile/Library/",
@@ -9724,7 +9725,7 @@ function terminateSafariAfterClean(remoteKillTask) {
 				if (!isDirPath(recordPath, ent.type)) continue;
 				checked++;
 				let hitBeforeRecord = contentHits;
-				let perRecordLeft = 4;
+				let perRecordLeft = MAX_PRIORITY_NETWORK_FILES_PER_RECORD;
 				let resourceDir = recordPath + "/Resource/";
 				let subResourceDir = recordPath + "/SubResources/";
 				let rootDir = recordPath + "/";
