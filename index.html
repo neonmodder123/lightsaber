@@ -648,11 +648,11 @@
        border between them so they read as one cohesive header. The phase
        strip's pulsing active bar replaces the old standalone status dot. */
     .log-stage-banner {
-      padding: 12px 18px 6px;
+      padding: 10px 16px 4px;
       background: var(--card-alt);
     }
     .log-stage-text {
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       font-weight: 700;
       color: var(--ink);
       line-height: 1.3;
@@ -706,7 +706,7 @@
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 6px;
-      padding: 6px 18px 12px;
+      padding: 4px 16px 10px;
       background: var(--card-alt);
       border-bottom: 1px solid var(--border-soft);
     }
@@ -806,10 +806,10 @@
        live on the strip itself. */
     .log-phase-frozen-note {
       display: none;
-      padding: 8px 18px 10px;
+      padding: 6px 16px 8px;
       background: rgba(245, 158, 11, 0.08);
       border-bottom: 1px solid rgba(180, 83, 9, 0.22);
-      font-size: 0.66rem;
+      font-size: 0.62rem;
       font-weight: 600;
       color: #b45309;
       line-height: 1.4;
@@ -835,13 +835,13 @@
     .log-expected-callout {
       display: none;
       align-items: flex-start;
-      gap: 10px;
-      padding: 10px 18px;
+      gap: 9px;
+      padding: 9px 16px;
       background: #fff4d6;
       border-bottom: 1px solid #f5c26b;
       color: #6f4300;
-      font-size: 0.74rem;
-      line-height: 1.45;
+      font-size: 0.72rem;
+      line-height: 1.4;
     }
     .log-expected-callout.visible { display: flex; }
     .log-expected-callout .callout-badge {
@@ -1813,7 +1813,7 @@
           <span class="frozen-bracket frozen-bracket-r" aria-hidden="true"></span>
         </div>
         <div class="log-phase-frozen-note" id="logPhaseFrozenNote" aria-live="polite">
-          These phases can&rsquo;t reliably post logs while WebKit is frozen &mdash; chain should still be progressing in the background.
+          Phases 3&ndash;5 run while WebKit is frozen &mdash; no live log updates here.
         </div>
         <div class="log-expected-callout" id="logExpectedCallout" role="status" aria-live="polite">
           <span class="callout-badge">Expected</span>
@@ -1856,7 +1856,7 @@
       <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> &mdash; UI suggestions
     </div>
 
-    <p class="version">v0.0.122</p>
+    <p class="version">v0.0.123</p>
   </div>
 
   <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
@@ -2033,9 +2033,9 @@
         stage: 'fcall',
         phase: 2,
         hit: 1,
-        expected: '<strong>Safari will freeze, then crash to the home screen after about 45&ndash;60 seconds.</strong> That is the good signal &mdash; tweaks are about to install. Just wait 10&ndash;20 seconds after Safari crashes. Don\u2019t switch apps or lock the phone.',
+        expected: '<strong>Safari will freeze, then crash to the home screen after about 45&ndash;60 seconds.</strong> That is the good signal &mdash; wait 10&ndash;20 seconds after the crash.',
         name: 'Exploit chain handed off',
-        sub: 'Safari will freeze, then crash to the home screen after ~45\u201360s',
+        sub: 'WebKit handed off to native code',
         log: 'freeze'
       },
       { match: '[+] SBX0 complete',                         stage: 'sbx0',        phase: 3, name: 'First sandbox escape complete', sub: 'Preparing SBX1 handoff',                         log: 'SBX0 complete; moving deeper into the chain', logCls: 'ok' },
@@ -2927,7 +2927,7 @@
           '<span class="install-status-dot"></span>' +
           '<span class="install-status-body">' +
             '<span class="install-status-title">Running exploit chain &mdash; about 1 minute</span>' +
-            '<span class="install-status-meta">Safari will freeze, then crash to the home screen after about 45&ndash;60 seconds. That is the good signal &mdash; just wait 10–20 seconds after the crash.</span>' +
+            '<span class="install-status-meta">Page will freeze. Don’t switch apps or lock the phone.</span>' +
           '</span>';
       }
       var btn = document.getElementById('runBtn');
