@@ -790,8 +790,40 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.4; }
     }
+    /* Freeze-imminent treatment. Applied at fcall (the last paint before
+       WebKit hands off to native and the parent main thread freezes with
+       it). Phases 3–5 will run during the freeze and never tick live, so
+       they switch from inert gray to amber + slow opacity pulse — that
+       reads as "queued and running in the background", not "stuck". The
+       active WebKit phase also shifts from blue to amber to match. */
+    .log-phase-strip.is-frozen .log-phase.active .log-phase-bar {
+      background: #f59e0b;
+      animation: phaseFreezeNow 1.0s ease-in-out infinite;
+    }
+    .log-phase-strip.is-frozen .log-phase.active .log-phase-label { color: #b45309; }
+    .log-phase-strip.is-frozen .log-phase:not(.active):not(.done):not(.err) .log-phase-bar {
+      background: #f59e0b;
+      animation: phaseFreezeWaiting 1.8s ease-in-out infinite;
+    }
+    .log-phase-strip.is-frozen .log-phase:not(.active):not(.done):not(.err) .log-phase-label {
+      color: #b45309;
+    }
+    @keyframes phaseFreezeNow {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.55; }
+    }
+    @keyframes phaseFreezeWaiting {
+      0%, 100% { opacity: 0.95; }
+      50%      { opacity: 0.45; }
+    }
+    /* Stagger the waiting-pulse so the bars don't all blink in unison —
+       reads more like "queue progressing" than "all 3 idle together". */
+    .log-phase-strip.is-frozen .log-phase[data-phase="3"] .log-phase-bar { animation-delay: 0s; }
+    .log-phase-strip.is-frozen .log-phase[data-phase="4"] .log-phase-bar { animation-delay: 0.4s; }
+    .log-phase-strip.is-frozen .log-phase[data-phase="5"] .log-phase-bar { animation-delay: 0.8s; }
     @media (prefers-reduced-motion: reduce) {
       .log-phase.active .log-phase-bar { animation: none; }
+      .log-phase-strip.is-frozen .log-phase .log-phase-bar { animation: none; }
     }
     /* Expected-behavior callout. Hidden by default; pops during freeze /
        cache-cleanup / Safari-kill phases since those are the counter-intuitive
@@ -1808,7 +1840,7 @@
       <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> &mdash; UI suggestions
     </div>
 
-    <p class="version">v0.0.112</p>
+    <p class="version">v0.0.113</p>
   </div>
 
   <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
@@ -2033,6 +2065,13 @@
           if (rule.expected) setExpectedCallout(rule.expected, rule.phase);
           if (rule.hit) hitExpectation(rule.hit);
           if (rule.stage === 'done') markAllPhasesDone();
+          // fcall is the WebKit→native handoff: parent main thread is about
+          // to freeze with the iframe. Flip the strip into freeze-imminent
+          // mode so phases 3–5 visibly look queued (amber, staggered pulse)
+          // instead of inert gray during the freeze the user is about to
+          // see. Done synchronously here so it lands in the brief paint
+          // window before WebKit actually pauses.
+          if (rule.stage === 'fcall') markFreezeImminent();
           return;
         }
       }
@@ -2073,6 +2112,8 @@
         var el = document.querySelector('.log-phase[data-phase="' + p + '"]');
         if (el) el.className = 'log-phase done';
       }
+      var strip = document.getElementById('logPhaseStrip');
+      if (strip) strip.classList.remove('is-frozen');
       currentPhase = 5;
       clearExpectedCallout();
     }
@@ -2081,6 +2122,8 @@
       if (!currentPhase) return;
       var el = document.querySelector('.log-phase[data-phase="' + currentPhase + '"]');
       if (el) el.className = 'log-phase err';
+      var strip = document.getElementById('logPhaseStrip');
+      if (strip) strip.classList.remove('is-frozen');
     }
 
     // text is markup from stageRules (trusted), not user input.
@@ -2123,8 +2166,15 @@
         var el = document.querySelector('.log-phase[data-phase="' + p + '"]');
         if (el) el.className = 'log-phase';
       }
+      var strip = document.getElementById('logPhaseStrip');
+      if (strip) strip.classList.remove('is-frozen');
       currentPhase = 0;
       clearExpectedCallout();
+    }
+
+    function markFreezeImminent() {
+      var strip = document.getElementById('logPhaseStrip');
+      if (strip) strip.classList.add('is-frozen');
     }
 
     function startLogWatchdog() {
