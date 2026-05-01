@@ -915,11 +915,26 @@
     #rawLogScroll {
       max-height: min(320px, 44dvh);
       overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
       padding: 8px 12px;
       background: #1a1a1c;
       border-top: 1px solid #2c2c2e;
+      /* Force a stable GPU layer for the scroll content. Replaces the
+         deprecated -webkit-overflow-scrolling: touch which on iOS Safari
+         had a long-standing content-recycling bug — lines appended while
+         the parent process was busy (or while WebKit was frozen during
+         the chain) would drop their paint when the user scrolled back
+         up to read them, showing as blank. translateZ(0) keeps the
+         layer composited cleanly, and contain: paint scopes paint
+         invalidations to this box so heavy main-thread work in the
+         iframe doesn't corrupt the scrolled-off content. */
+      transform: translateZ(0);
+      contain: paint;
+    }
+    .raw-log-line {
+      /* Promote each line to its own paint boundary so scrolled-off
+         lines retain their text after the freeze. */
+      contain: layout paint;
     }
     .raw-log-empty,
     .raw-log-line {
@@ -1841,7 +1856,7 @@
       <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> &mdash; UI suggestions
     </div>
 
-    <p class="version">v0.0.120</p>
+    <p class="version">v0.0.121</p>
   </div>
 
   <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
@@ -2258,6 +2273,20 @@
       } catch (e) {}
     }
 
+    var rawLogScrollPending = false;
+    function scheduleRawLogScrollToBottom() {
+      if (rawLogScrollPending) return;
+      rawLogScrollPending = true;
+      var run = function() {
+        rawLogScrollPending = false;
+        if (!rawLogStickyBottom) return;
+        var el2 = document.getElementById('rawLogScroll');
+        if (el2) el2.scrollTop = el2.scrollHeight;
+      };
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+      else setTimeout(run, 16);
+    }
+
     function rawLogAppend(text, cls, skipStore) {
       var el = document.getElementById('rawLogScroll');
       if (!el) return;
@@ -2270,9 +2299,11 @@
       // Cap DOM line count so very long runs don't accumulate thousands of
       // nodes and trigger iOS Safari rendering glitches on scroll.
       while (el.children.length > RAW_LOG_DOM_LIMIT) el.removeChild(el.firstChild);
-      // Only autoscroll when the user is already at the bottom — see
-      // rawLogStickyBottom note above.
-      if (rawLogStickyBottom) el.scrollTop = el.scrollHeight;
+      // Batch scroll-to-bottom into a single rAF callback so a burst of
+      // lines doesn't thrash scrollTop on every append — that thrash is
+      // what corrupted the GPU layer on iOS Safari and made earlier lines
+      // look blank when scrolled back to.
+      if (rawLogStickyBottom) scheduleRawLogScrollToBottom();
       if (!skipStore) rawLogStoreLine(text, cls);
     }
 
