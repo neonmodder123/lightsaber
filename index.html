@@ -625,6 +625,7 @@
     .log-line:last-child { border-bottom: none; }
     .log-line.ok { color: #0f7a3d; }
     .log-line.err { color: #c41e1e; }
+    .log-line.note { color: #8a5a00; }
     .log-line.device { color: var(--accent-dark); }
     .btn-view-log {
       display: none;
@@ -1459,7 +1460,7 @@
       <div class="tip">
         <div class="tip-icon">i</div>
         <div class="tip-body">
-          <strong>Tip:</strong> takes up to 60 seconds. Keep Safari in the foreground while it runs &mdash; don't switch apps or lock the device. If it works, don't press your luck.<br><br>
+          <strong>Tip:</strong> this can take a few minutes on A18 devices. Keep Safari in the foreground while it runs &mdash; don't switch apps or lock the device. A freeze is expected; if Safari later closes or reloads, that is usually the post-PE cache cleanup killing Safari and is a good sign.<br><br>
           <strong>Expect multiple attempts.</strong> This is a kernel exploit chain &mdash; it genuinely can take up to 5 tries before it lands. Kill Safari from the app switcher between attempts, reopen, and try again. That's normal.<br><br>
           <strong>If it keeps failing:</strong> clear Safari's cache (book icon &rarr; Clear), reload this page, and retry. If it still won't land after several attempts, reboot the device, clear the cache again, and start fresh.
         </div>
@@ -1497,7 +1498,7 @@
       <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> &mdash; UI suggestions
     </div>
 
-    <p class="version">v0.0.98</p>
+    <p class="version">v0.0.99</p>
   </div>
 
   <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
@@ -1613,6 +1614,7 @@
     var watchdogTicks = 0;
     var currentStage = '';
     var currentStageName = '';
+    var oneShotLogs = {};
     // Maps raw log patterns to user-friendly stage descriptions.
     // Order matters: first match wins. 'log' = message shown in scrolling log (omit to skip).
     var stageRules = [
@@ -1625,8 +1627,38 @@
       { match: 'RCE success',           stage: 'rce2',  name: 'Code execution achieved',         sub: 'Moving to next stage',                                 log: 'Full code execution inside Safari' },
       { match: 'check_dlopen',          stage: 'dyld',  name: 'Loading system libraries',        sub: 'Hijacking dyld to load frameworks',                    log: 'Hijacking dyld to load system frameworks...' },
       { match: 'sign_pointers',         stage: 'dyld',  name: 'Signing function pointers',       sub: 'Bypassing pointer authentication (PAC)',               log: 'Bypassing pointer authentication...' },
-      { match: 'inside setup_fcall',    stage: 'fcall', name: 'Exploit chain running',            sub: 'Safari is about to freeze \u2014 this is a good sign', log: 'freeze' },
+      {
+        match: 'inside setup_fcall',
+        stage: 'fcall',
+        name: 'Exploit chain handed off',
+        sub: 'Safari is about to freeze \u2014 this is expected',
+        log: 'freeze',
+        notes: [
+          { text: 'Safari freezing means WebKit reached the native-call handoff.', cls: 'ok', delay: 0 },
+          { text: 'Next backend sign: PE runs in mediaplaybackd, then Lightsaber cache cleanup starts.', cls: 'device', delay: 0.15 },
+          { text: 'If Safari closes or reloads later, that usually means cache cleanup killed Safari after successful post-PE progress.', cls: 'ok', delay: 0.3 },
+          { text: 'Home screen changes happen near the end when SpringBoard injection runs.', cls: 'device', delay: 0.45 }
+        ]
+      },
+      { match: '[+] SBX0 complete',                         stage: 'sbx0',        name: 'First sandbox escape complete', sub: 'Preparing SBX1 handoff',                         log: 'SBX0 complete; moving deeper into the chain', logCls: 'ok' },
+      { match: 'Stage 5 started',                           stage: 'sbx1',        name: 'Second sandbox escape running', sub: 'Escalating into the PE launch path',               log: 'SBX1 started' },
+      { match: 'sbx1sbx1 returning success',                stage: 'sbx1-done',   name: 'Second sandbox escape complete', sub: 'Spawning PE in mediaplaybackd',                  log: 'SBX1 complete; spawning PE', logCls: 'ok' },
+      { match: 'Executing pe_main.js',                       stage: 'pe-spawn',    name: 'Kernel phase starting', sub: 'PE payload scheduled in mediaplaybackd',                 log: 'PE payload scheduled' },
+      { match: '[PE-DBG] pe_main entry',                     stage: 'pe-entry',    name: 'PE is alive', sub: 'mediaplaybackd is now logging the kernel phase',                 log: 'PE syslog entry received', logCls: 'ok' },
+      { match: '[PE] Calling pe() - kernel exploit phase',   stage: 'pe-kernel',   name: 'Kernel exploit running', sub: 'This is the longest part of the chain',                log: 'Kernel phase running; this can take a couple minutes' },
+      { match: '[+] PE start() called',                      stage: 'post-pe',     name: 'Post-PE reached', sub: 'Kernel primitive succeeded; applying selected actions',       log: 'Post-PE reached', logCls: 'ok' },
+      { match: '[SAFARI-CLEAN] audit start',                 stage: 'safari-clean', name: 'Cleaning Lightsaber Safari data', sub: 'This is a good sign: post-PE is running',       log: 'Cleaning Lightsaber cache and Safari state', logCls: 'ok' },
+      { match: '[SAFARI-CLEAN] audit done',                  stage: 'safari-clean-done', name: 'Safari data cleanup complete', sub: 'Cache cleanup finished without blocking the chain', log: 'Safari cleanup finished', logCls: 'ok' },
+      { match: '[SAFARI-CLEAN] safari-kill done',            stage: 'safari-kill', name: 'Restarting Safari', sub: 'Safari may close or reload here; that is expected',        log: 'Safari kill completed after cache cleanup', logCls: 'ok' },
+      { match: 'SBCustomizer JS inject result: true',        stage: 'springboard', name: 'SpringBoard changes applied', sub: 'Home screen tweak injection succeeded',           log: 'SpringBoard customization applied', logCls: 'ok' },
+      { match: '[PE] start() completed successfully',        stage: 'done',        name: 'Install complete', sub: 'All selected stages finished',                              log: 'PE reported full completion', logCls: 'ok' },
     ];
+
+    function logOnce(key, text, cls, delay) {
+      if (oneShotLogs[key]) return;
+      oneShotLogs[key] = true;
+      logAppend(text, cls, delay);
+    }
 
     function updateStage(text) {
       if (!text) return;
@@ -1644,15 +1676,13 @@
           if (dot) {
             dot.className = 'log-stage-dot' + (rule.stage === 'done' ? ' done' : '');
           }
-          if (rule.stage === 'fcall') {
-            // Safari is about to freeze — no more messages will show
-            // after this. Write all guidance now as static log lines.
-            logAppend('Safari will freeze soon \u2014 that means it\u2019s working.', '', 0);
-            logAppend('Wait about 45\u201360 seconds, then check your home screen to see if changes took hold.', '', 0.15);
-            logAppend('For MobileGestalt modifications and 3-app limit bypass, you will need to respring or reboot to see changes take effect.', '', 0.3);
-            logAppend('If the tweaks didn\u2019t apply, reboot your device before retrying \u2014 a reboot gives you a fresh kernel state and the cleanest chance of success.', 'device', 0.45);
-          } else if (rule.log) {
-            logAppend(rule.log, rule.stage === 'done' ? 'ok' : '');
+          if (rule.log && rule.log !== 'freeze') {
+            logOnce('rule:' + rule.stage + ':' + rule.match, rule.log, rule.logCls || (rule.stage === 'done' ? 'ok' : ''));
+          }
+          if (rule.notes) {
+            for (var n = 0; n < rule.notes.length; n++) {
+              logOnce('note:' + rule.stage + ':' + n, rule.notes[n].text, rule.notes[n].cls || '', rule.notes[n].delay || 0);
+            }
           }
           return;
         }
@@ -2077,17 +2107,17 @@
       return { tweaks: tweaks, level: level, sbc: sbc, mg_flags: mgFlags.join(','), mg_unflags: mgUnflags.join(',') };
     }
 
-    function markDone() {
+    function markDone(message) {
       if (doneSignal) return;
       doneSignal = true;
       stopLogWatchdog();
-      logAppend('Install complete!', 'ok');
+      logAppend(message || 'Install complete!', 'ok');
       var dot = document.getElementById('logStageDot');
       var stageText = document.getElementById('logStageText');
       var stageSub = document.getElementById('logStageSub');
       if (dot) dot.className = 'log-stage-dot done';
-      if (stageText) stageText.textContent = 'Install complete';
-      if (stageSub) stageSub.textContent = 'All tweaks applied successfully';
+      if (stageText) stageText.textContent = message ? 'Check result' : 'Install complete';
+      if (stageSub) stageSub.textContent = message ? 'Safari returned after the expected run window' : 'All tweaks applied successfully';
       try { sessionStorage.removeItem('ls_running'); } catch(e) {}
       var installStatusEl = document.getElementById('installStatus');
       if (installStatusEl) {
@@ -2097,7 +2127,7 @@
       }
       var btn = document.getElementById('runBtn');
       if (btn) {
-        btn.textContent = 'Installed';
+        btn.textContent = message ? 'Check Result' : 'Installed';
         btn.className = 'btn btn-done';
       }
     }
@@ -2278,7 +2308,7 @@
       doneSignal = false;
       if (installStatusEl) {
         installStatusEl.classList.remove('error');
-        installStatusEl.textContent = 'WebKit exploit \u2192 sandbox escape \u2192 kernel exploit \u2192 process injection is underway\u2026';
+        installStatusEl.textContent = 'Running chain: Safari may freeze; cache cleanup may close or reload Safari near the end.';
       }
       var btn = document.getElementById('runBtn');
       if (btn) {
@@ -2301,6 +2331,7 @@
 
       var logBody = document.getElementById('logSheetBody');
       logBody.innerHTML = '';
+      oneShotLogs = {};
       currentStage = 'start';
       currentStageName = 'Starting';
       var dot = document.getElementById('logStageDot');
@@ -2314,6 +2345,8 @@
       var tweakDisplayNames = { fiveicon: 'SBCustomizer', powercuff: 'Powercuff', mgpatcher: 'MobileGestalt Patcher', applimit: '3-App Limit Bypass' };
       var displayTweaks = tweaks.map(function(t) { return tweakDisplayNames[t] || t; });
       logAppend('Starting install with: ' + displayTweaks.join(', '), 'ok');
+      logAppend('Expected signs: Safari freeze \u2192 PE kernel phase \u2192 Lightsaber cache cleanup \u2192 Safari close/reload \u2192 SpringBoard changes.', 'device');
+      logAppend('If Safari closes or reloads after a long freeze, treat that as a progress signal, not an immediate failure.', 'note');
       startLogWatchdog();
       openLogSheet();
 
@@ -2323,7 +2356,9 @@
       // iOS Safari's cross-origin / detached-frame access semantics aren't
       // reliable across versions, and the upstream chain expects the user to
       // notice that "Safari froze/crashed/reloaded means it worked" anyway.
-      setTimeout(markDone, 60000);
+      setTimeout(function() {
+        markDone('Expected run window elapsed. If Safari froze or was cleaned/killed, check your home screen and Mac syslog now.');
+      }, 210000);
 
       // Force a layout flush on the status + button text writes above so
       // the browser sees them as committed style changes before we yield.
