@@ -517,10 +517,24 @@
     .log-sheet-header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 10px;
       padding: 14px 18px 12px;
       border-bottom: 1px solid var(--border-soft);
     }
+    .log-sheet-clear {
+      background: var(--card-alt);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-size: 0.66rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .log-sheet-clear:active { opacity: 0.6; }
     .log-sheet-header .tweak-sheet-back {
       background: none;
       border: none;
@@ -729,57 +743,17 @@
     }
     .expectation-row.hit { color: #1f4f24; }
     .expectation-row.hit .expectation-copy strong { color: #0f3a13; }
-    #rawLogBox {
-      display: block;
-      margin-top: 10px;
-      background: #1a1a1c;
-      border: 1px solid #2c2c2e;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 12px 32px rgba(0,0,0,0.18);
-    }
-    #rawLogBox.hidden { display: none; }
-    #rawLogBox .raw-log-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 8px 12px;
-      font-size: 0.66rem;
-      font-weight: 700;
-      color: #d1d1d6;
-      background: #222224;
-      border-bottom: 1px solid #2c2c2e;
-    }
-    .raw-log-subtitle {
-      display: block;
-      margin-top: 2px;
-      font-size: 0.58rem;
-      font-weight: 600;
-      color: #8e8e93;
-    }
-    .raw-log-actions {
-      display: inline-flex;
-      gap: 6px;
-      flex-shrink: 0;
-    }
-    .raw-log-action {
-      border: 1px solid #3a3a3c;
-      background: #2c2c2e;
-      color: #f2f2f7;
-      border-radius: 7px;
-      padding: 4px 8px;
-      font-size: 0.6rem;
-      font-weight: 800;
-      line-height: 1.2;
-      font-family: inherit;
-    }
+    /* The log scroll lives inside .log-sheet now (no standalone box). Dark
+       terminal styling on the scroll itself contrasts with the white card,
+       so the raw stream reads like a console panel embedded in the card. */
     #rawLogScroll {
-      max-height: min(260px, 38dvh);
+      max-height: min(320px, 44dvh);
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
       padding: 8px 12px;
+      background: #1a1a1c;
+      border-top: 1px solid #2c2c2e;
     }
     .raw-log-empty,
     .raw-log-line {
@@ -803,20 +777,6 @@
     .raw-log-line.springboard { color: #bf5af2; }
     .raw-log-line.pe { color: #30d158; }
     .raw-log-line.note { color: #ffd60a; }
-    .btn-view-log {
-      display: none;
-      background: none;
-      border: none;
-      color: var(--accent);
-      font-family: inherit;
-      font-size: 0.74rem;
-      font-weight: 600;
-      padding: 6px 0;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .btn-view-log:active { opacity: 0.5; }
-    .btn-view-log.visible { display: inline-block; }
     .version {
       font-family: var(--mono);
       font-size: 0.66rem;
@@ -1632,7 +1592,6 @@
         </div>
       </div>
       <div id="installStatus" class="install-status"></div>
-      <button type="button" class="btn-view-log" id="viewLogBtn" onclick="openLogSheet()">View Log</button>
       <div class="run-expectations" id="runExpectations">
         <div class="run-expectations-title">What to expect when you press Install</div>
         <div class="expectation-list">
@@ -1654,9 +1613,10 @@
           </div>
         </div>
       </div>
-      <div class="log-sheet" id="logSheet">
+      <div class="log-sheet" id="logSheet" aria-live="polite">
         <div class="log-sheet-header">
-          <span class="log-sheet-title">Activity Log</span>
+          <span class="log-sheet-title">WebContent Log</span>
+          <button type="button" class="log-sheet-clear" onclick="clearRawLogView()">Clear</button>
         </div>
         <div class="log-stage-banner" id="logStageBanner">
           <div class="log-stage-text" id="logStageText">Waiting to start</div>
@@ -1673,20 +1633,8 @@
           <span class="callout-badge">Expected</span>
           <span class="callout-text" id="logExpectedCalloutText"></span>
         </div>
-        <div class="log-sheet-body" id="logSheetBody">
-          <div class="log-sheet-empty" id="logSheetEmpty">Waiting for exploit chain...</div>
-        </div>
-      </div>
-      <div id="rawLogBox" aria-live="polite">
-        <div class="raw-log-header">
-          <span>Raw WebContent Log<span class="raw-log-subtitle">verbose stream from iframe and worker</span></span>
-          <span class="raw-log-actions">
-            <button type="button" class="raw-log-action" onclick="clearRawLogView()">Clear</button>
-            <button type="button" class="raw-log-action" onclick="hideRawLogView()">Hide</button>
-          </span>
-        </div>
         <div id="rawLogScroll">
-          <div class="raw-log-empty" id="rawLogEmpty">Raw exploit logs will appear here when a run starts.</div>
+          <div class="raw-log-empty" id="rawLogEmpty">WebContent log lines will appear here when a run starts.</div>
         </div>
       </div>
       <div class="tip" id="installTip">
@@ -1730,7 +1678,7 @@
       <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> &mdash; UI suggestions
     </div>
 
-    <p class="version">v0.0.107</p>
+    <p class="version">v0.0.108</p>
   </div>
 
   <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
@@ -1835,7 +1783,6 @@
     var watchdogTicks = 0;
     var currentStage = '';
     var currentStageName = '';
-    var oneShotLogs = {};
     var RAW_LOG_STORE_KEY = 'ls_raw_log_lines_v1';
     var RAW_LOG_ACTIVE_KEY = 'ls_raw_log_active_v1';
     var RAW_LOG_STORE_LIMIT = 260;
@@ -1900,12 +1847,6 @@
       { match: '[PE] start() completed successfully',        stage: 'done',        phase: 5, name: 'Install complete', sub: 'All selected stages finished',                              log: 'PE reported full completion', logCls: 'ok' },
     ];
 
-    function logOnce(key, text, cls, delay) {
-      if (oneShotLogs[key]) return;
-      oneShotLogs[key] = true;
-      logAppend(text, cls, delay);
-    }
-
     function updateStage(text) {
       if (!text) return;
       for (var i = 0; i < stageRules.length; i++) {
@@ -1927,14 +1868,6 @@
           if (rule.expected) setExpectedCallout(rule.expected, rule.phase);
           if (rule.hit) hitExpectation(rule.hit);
           if (rule.stage === 'done') markAllPhasesDone();
-          if (rule.log && rule.log !== 'freeze') {
-            logOnce('rule:' + rule.stage + ':' + rule.match, rule.log, rule.logCls || (rule.stage === 'done' ? 'ok' : ''));
-          }
-          if (rule.notes) {
-            for (var n = 0; n < rule.notes.length; n++) {
-              logOnce('note:' + rule.stage + ':' + n, rule.notes[n].text, rule.notes[n].cls || '', rule.notes[n].delay || 0);
-            }
-          }
           return;
         }
       }
@@ -2057,16 +1990,28 @@
       if (logWatchdog) { clearInterval(logWatchdog); logWatchdog = null; }
     }
 
-    function openLogSheet() {
+    // Bring the consolidated WebContent log card precisely to the top of the
+    // viewport so the user lands on it the moment the chain starts. Using
+    // getBoundingClientRect + window.scrollTo lets us aim the card to a
+    // small breathing-room offset (12px) instead of sticking it flush to
+    // the URL bar, and avoids the "nearest" heuristic that previously
+    // sometimes left the card mostly off-screen.
+    function scrollToLog() {
       var sheet = document.getElementById('logSheet');
-      if (sheet && sheet.scrollIntoView) sheet.scrollIntoView({ block: 'nearest' });
-      var body = document.getElementById('logSheetBody');
-      if (body) body.scrollTop = body.scrollHeight;
+      if (!sheet) return;
+      var rect = sheet.getBoundingClientRect();
+      var target = (window.pageYOffset || window.scrollY || 0) + rect.top - 12;
+      try {
+        window.scrollTo({ top: target, behavior: 'smooth' });
+      } catch (e) {
+        window.scrollTo(0, target);
+      }
+      var scroll = document.getElementById('rawLogScroll');
+      if (scroll) scroll.scrollTop = scroll.scrollHeight;
     }
-
-    function closeLogSheet() {
-      openLogSheet();
-    }
+    // Legacy entry points kept for any inline callers in this file.
+    function openLogSheet()  { scrollToLog(); }
+    function closeLogSheet() { scrollToLog(); }
 
     function classifyRawLogLine(text) {
       var msg = String(text || '').toLowerCase();
@@ -2102,20 +2047,10 @@
       if (!skipStore) rawLogStoreLine(text, cls);
     }
 
-    function showRawLogView() {
-      var lb = document.getElementById('rawLogBox');
-      if (lb) lb.className = '';
-    }
-
-    function hideRawLogView() {
-      var lb = document.getElementById('rawLogBox');
-      if (lb) lb.className = 'hidden';
-    }
-
     function clearRawLogView(keepActive) {
       var el = document.getElementById('rawLogScroll');
       if (el) {
-        el.innerHTML = '<div class="raw-log-empty" id="rawLogEmpty">Raw exploit logs will appear here when a run starts.</div>';
+        el.innerHTML = '<div class="raw-log-empty" id="rawLogEmpty">WebContent log lines will appear here when a run starts.</div>';
       }
       try {
         localStorage.removeItem(RAW_LOG_STORE_KEY);
@@ -2128,24 +2063,18 @@
         if (localStorage.getItem(RAW_LOG_ACTIVE_KEY) !== '1') return;
         var lines = JSON.parse(localStorage.getItem(RAW_LOG_STORE_KEY) || '[]');
         if (!lines || !lines.length) return;
-        showRawLogView();
-        rawLogAppend('[UI] Previous run was interrupted. Last raw WebContent log follows:', 'device', true);
+        rawLogAppend('[UI] Previous run was interrupted. Last WebContent log follows:', 'device', true);
         for (var i = 0; i < lines.length; i++) {
           rawLogAppend(lines[i].text, lines[i].cls || '', true);
         }
       } catch (e) {}
     }
 
-    function logAppend(text, cls, delay) {
-      var body = document.getElementById('logSheetBody');
-      var empty = document.getElementById('logSheetEmpty');
-      if (empty) empty.remove();
-      var line = document.createElement('div');
-      line.className = 'log-line' + (cls ? ' ' + cls : '');
-      line.textContent = text;
-      if (delay) line.style.animationDelay = delay + 's';
-      body.appendChild(line);
-      body.scrollTop = body.scrollHeight;
+    // Thin wrapper so existing UI-event callers ("Starting install with…",
+    // markDone / markFailed banners, watchdog hints, error promotions) land
+    // in the same WebContent log stream as the raw iframe messages, with a
+    // [UI] prefix to distinguish them from the iframe's own [Xms] entries.
+    function logAppend(text, cls) {
       rawLogAppend('[UI] ' + text, cls || classifyRawLogLine(text));
     }
 
@@ -2744,12 +2673,8 @@
         installStatusEl.dataset.sbxDone = '';
       }
 
-      var logBody = document.getElementById('logSheetBody');
-      logBody.innerHTML = '';
       clearRawLogView(true);
-      showRawLogView();
       try { localStorage.setItem(RAW_LOG_ACTIVE_KEY, '1'); } catch(e) {}
-      oneShotLogs = {};
       currentStage = 'start';
       currentStageName = 'Starting';
       resetPhases();
@@ -2760,22 +2685,19 @@
       if (stageBanner) { stageBanner.classList.remove('done'); stageBanner.classList.remove('err'); }
       if (stageText) stageText.textContent = 'Starting exploit chain';
       if (stageSub) stageSub.textContent = 'Loading components...';
-      // Hide chrome that duplicates the live activity log during a run: the
-      // legacy "View Log" jump link, the static "What to expect" panel, and
-      // the long retry tip box. The phase strip and Expected callout cover
-      // all of that in-context once the chain is moving.
-      var viewLogBtn = document.getElementById('viewLogBtn');
-      if (viewLogBtn) viewLogBtn.className = 'btn-view-log';
+      // Hide chrome that duplicates the consolidated WebContent log during
+      // a run: the static "What to expect" panel and the long retry tip box.
+      // The phase strip and Expected callout cover that in-context now.
       var runExpEl = document.getElementById('runExpectations');
       if (runExpEl) runExpEl.classList.add('hidden');
       var tipEl = document.getElementById('installTip');
       if (tipEl) tipEl.classList.add('hidden');
       var tweakDisplayNames = { fiveicon: 'SBCustomizer', powercuff: 'Powercuff', mgpatcher: 'MobileGestalt Patcher', applimit: '3-App Limit Bypass' };
       var displayTweaks = tweaks.map(function(t) { return tweakDisplayNames[t] || t; });
-      rawLogAppend('[UI] Raw WebContent log armed', 'ok');
+      rawLogAppend('[UI] WebContent log armed', 'ok');
       logAppend('Starting install with: ' + displayTweaks.join(', '), 'ok');
       startLogWatchdog();
-      closeLogSheet();
+      scrollToLog();
 
       // Match the upstream DarkSword install button: just a 60-second
       // setTimeout fallback plus a postMessage listener for the iframe's
