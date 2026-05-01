@@ -1414,7 +1414,7 @@
 
     <div class="section">
       <p id="supportMsg" style="font-size:0.78rem;margin-bottom:4px"></p>
-      <p style="font-size:0.7rem;color:var(--faint);margin-bottom:10px">A12&ndash;A18 Pro &middot; iOS 18.4&ndash;18.6.2</p>
+      <p style="font-size:0.7rem;color:var(--faint);margin-bottom:10px">iPhone &middot; iOS 18.4&ndash;18.6.2</p>
 
       <div class="tweak-list">
         <div class="tweak-section-label">SpringBoard</div>
@@ -1571,7 +1571,7 @@
           </div>
           <div class="expectation-row">
             <span class="expectation-badge">2</span>
-            <span class="expectation-copy"><strong>The quiet part can take a few minutes.</strong> The A18 PE/kernel phase is the long section; no visible movement is normal here.</span>
+            <span class="expectation-copy"><strong>This takes about 1 minute total.</strong> The kernel phase is usually the quiet part; no visible movement is normal here.</span>
           </div>
           <div class="expectation-row">
             <span class="expectation-badge">3</span>
@@ -1613,7 +1613,7 @@
       <div class="tip">
         <div class="tip-icon">i</div>
         <div class="tip-body">
-          <strong>Tip:</strong> this can take a few minutes on A18 devices. Keep Safari in the foreground while it runs &mdash; don't switch apps or lock the device. A freeze is expected. Cache cleanup and Safari termination are late-stage signs, not failures.<br><br>
+          <strong>Tip:</strong> this takes about 1 minute total, approximately. Keep Safari in the foreground while it runs &mdash; don't switch apps or lock the device. A freeze is expected. Cache cleanup and Safari termination are late-stage signs, not failures.<br><br>
           <strong>Expect multiple attempts.</strong> This is a kernel exploit chain &mdash; it genuinely can take up to 5 tries before it lands. Kill Safari from the app switcher between attempts, reopen, and try again. That's normal.<br><br>
           <strong>If it keeps failing:</strong> clear Safari's cache (book icon &rarr; Clear), reload this page, and retry. If it still won't land after several attempts, reboot the device, clear the cache again, and start fresh.
         </div>
@@ -1651,7 +1651,7 @@
       <a href="https://twitter.com/cro4js" target="_blank" rel="noopener">@cro4js</a> &mdash; UI suggestions
     </div>
 
-    <p class="version">v0.0.103</p>
+    <p class="version">v0.0.104</p>
   </div>
 
   <div class="tweak-sheet-backdrop" id="tweakSheetBackdrop"></div>
@@ -1685,7 +1685,7 @@
   <div id="confirmOverlay" class="overlay">
     <div class="dialog">
       <h2>Before it runs</h2>
-      <p>After you press Proceed, keep Safari open and do not lock the phone. The page may freeze for a few minutes.</p>
+      <p>After you press Proceed, keep Safari open and do not lock the phone. The full run usually takes about 1 minute, approximately.</p>
       <div class="run-expectations" style="margin-top:12px;text-align:left">
         <div class="expectation-list">
           <div class="expectation-row"><span class="expectation-badge">✓</span><span class="expectation-copy"><strong>Freeze:</strong> normal after WebKit handoff.</span></div>
@@ -1790,7 +1790,7 @@
       { match: 'sbx1sbx1 returning success',                stage: 'sbx1-done',   name: 'Second sandbox escape complete', sub: 'Spawning PE in mediaplaybackd',                  log: 'SBX1 complete; spawning PE', logCls: 'ok' },
       { match: 'Executing pe_main.js',                       stage: 'pe-spawn',    name: 'Kernel phase starting', sub: 'PE payload scheduled in mediaplaybackd',                 log: 'PE payload scheduled' },
       { match: '[PE-DBG] pe_main entry',                     stage: 'pe-entry',    name: 'PE is alive', sub: 'mediaplaybackd is now logging the kernel phase',                 log: 'PE syslog entry received', logCls: 'ok' },
-      { match: '[PE] Calling pe() - kernel exploit phase',   stage: 'pe-kernel',   name: 'Kernel exploit running', sub: 'This is the longest part of the chain',                log: 'Kernel phase running; this can take a couple minutes' },
+      { match: '[PE] Calling pe() - kernel exploit phase',   stage: 'pe-kernel',   name: 'Kernel exploit running', sub: 'This is usually the quiet part of the chain',          log: 'Kernel phase running; total run is about 1 minute' },
       { match: '[+] PE start() called',                      stage: 'post-pe',     name: 'Post-PE reached', sub: 'Kernel primitive succeeded; applying selected actions',       log: 'Post-PE reached', logCls: 'ok' },
       { match: '[SAFARI-CLEAN] audit start',                 stage: 'safari-clean', name: 'Cleaning Lightsaber Safari data', sub: 'This is a good sign: post-PE is running',       log: 'Cleaning Lightsaber cache and Safari state', logCls: 'ok' },
       { match: '[SAFARI-CLEAN] audit done',                  stage: 'safari-clean-done', name: 'Safari data cleanup complete', sub: 'Cache cleanup finished without blocking the chain', log: 'Safari cleanup finished', logCls: 'ok' },
@@ -2580,7 +2580,7 @@
       // notice that "Safari froze/crashed/reloaded means it worked" anyway.
       setTimeout(function() {
         markDone('Expected run window elapsed. If Safari froze or was cleaned/killed, check your home screen and Mac syslog now.');
-      }, 210000);
+      }, 90000);
 
       // Force a layout flush on the status + button text writes above so
       // the browser sees them as committed style changes before we yield.
