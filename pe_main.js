@@ -8506,7 +8506,7 @@ const ENABLE_SPRINGBOARD_AGENT = ENABLE_CORUNA_TWEAKLOADER || ENABLE_SPRINGBOARD
 // asynchronously. When it runs without Powercuff piggybacking on it, keep the
 // chain alive briefly so the dispatched main-thread work has time to run
 // before task teardown.
-const SBCUST_ONLY_SETTLE_DELAY_USEC = 1500000n;
+const SPRINGBOARD_TWEAK_SETTLE_DELAY_USEC = 1500000n;
 const ENABLE_UNRELATED_DUMPS = false;
 const ENABLE_KEYCHAIN_DUMP = false;
 const ENABLE_WIFI_DUMP = false;
@@ -9865,9 +9865,9 @@ function start() {
 					springboardTweakInjected = injectLightweightSpringBoardPayload(agentLoader.task, migFilterBypass, agentPid, SPRINGBOARD_JS_TWEAK_PATH, SPRINGBOARD_JS_TWEAK_LABEL);
 				else
 					LOG("[PE] SpringBoard JS tweak disabled");
-				if (springboardTweakInjected && !ENABLE_POWERCUFF_TWEAK && SBCUST_ONLY_SETTLE_DELAY_USEC > 0n) {
-					LOG("[PE] SpringBoard-only mode: waiting " + SBCUST_ONLY_SETTLE_DELAY_USEC.toString() + " usec for async main-thread dispatch to settle");
-					libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"].callSymbol("usleep", SBCUST_ONLY_SETTLE_DELAY_USEC);
+				if (springboardTweakInjected && SPRINGBOARD_TWEAK_SETTLE_DELAY_USEC > 0n) {
+					LOG("[PE] Waiting " + SPRINGBOARD_TWEAK_SETTLE_DELAY_USEC.toString() + " usec for SpringBoard async main-thread dispatch to settle before continuing");
+					libs_Chain_Native__WEBPACK_IMPORTED_MODULE_0__["default"].callSymbol("usleep", SPRINGBOARD_TWEAK_SETTLE_DELAY_USEC);
 				}
 
 			} else {
