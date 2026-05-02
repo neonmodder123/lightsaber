@@ -8485,7 +8485,7 @@ const ENABLE_CORUNA_TWEAKLOADER = false;
 // in a single chain run. index.html can select any subset; each flag drives an
 // independent payload injection. Defaults to fiveicon if no tweak flags are
 // specified (e.g. when pe_main.js is run standalone without the sbx1 prelude).
-const ENABLE_SPRINGBOARD_JS_TWEAK = (typeof globalThis.__ls_enable_fiveicon === 'undefined' && typeof globalThis.__ls_enable_powercuff === 'undefined' && typeof globalThis.__ls_enable_mgpatcher === 'undefined' && typeof globalThis.__ls_enable_applimit === 'undefined') ? true : !!globalThis.__ls_enable_fiveicon;
+const ENABLE_SPRINGBOARD_JS_TWEAK = (typeof globalThis.__ls_enable_fiveicon === 'undefined' && typeof globalThis.__ls_enable_powercuff === 'undefined' && typeof globalThis.__ls_enable_mgpatcher === 'undefined' && typeof globalThis.__ls_enable_applimit === 'undefined' && typeof globalThis.__ls_enable_statbar === 'undefined') ? true : (!!globalThis.__ls_enable_fiveicon || !!globalThis.__ls_enable_statbar);
 const SPRINGBOARD_JS_TWEAK_PATH = "/sbcustomizer_light.js";
 const SPRINGBOARD_JS_TWEAK_LABEL = "SBCustomizer JS";
 const ENABLE_CHAIN_STATUS_OVERLAY = globalThis.__ls_enable_chain_overlay === true;

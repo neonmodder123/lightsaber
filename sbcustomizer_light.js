@@ -40,6 +40,15 @@
   // layoutForIconLocation:], -[SBIconListGridLayoutConfiguration
   // setNumberOfPortraitColumns:] / setNumberOfPortraitRows:).
   const ENABLE_HOMESCREEN_COL_PATCH = true;
+  // SBCustomizer features (dock icons / home grid / hide labels) only run
+  // when the parent fiveicon tweak is enabled. StatBar is now its own
+  // top-level tweak that reuses this same payload, so a user who enables
+  // ONLY StatBar (without SBCustomizer) gets the overlay without any
+  // dock/grid patches. __ls_enable_fiveicon is set by pe_main.js's
+  // prelude (sbx1_main.js's prelude on the chain path) per lsTweakSet.
+  // Default true if the global is undefined so the standalone-payload
+  // case (no chain prelude) still works.
+  const ENABLE_FIVEICON = (globalThis.__ls_enable_fiveicon !== false);
   // StatBar: snapshot overlay window showing battery temp + total RAM.
   // Ported from Coruna-Tweaks-Collection/StatBar/StatBar.m. Snapshot only
   // (no NSTimer) because block-based timers need a real ObjC block we
@@ -1645,6 +1654,10 @@
   }
 
   function applyDockPatch(passTag) {
+    if (!ENABLE_FIVEICON) {
+      log("applyDockPatch(" + passTag + ") skipped: ENABLE_FIVEICON=false (StatBar-only run)");
+      return false;
+    }
     log("applyDockPatch(" + passTag + ") entered - running on main thread");
     const SBIconController = Native.callSymbol("objc_getClass", "SBIconController");
     if (!isNonZero(SBIconController)) {

@@ -6849,7 +6849,7 @@
       pe_stage1_js_data = gpuCopyBuffer(read64(addrof(pe_stage1_js_data_array) + 0x10n), BigInt(pe_stage1_js_data_array.length));
       let pe_main_js_str = getJS('pe_main.js?' + Date.now());
       let lsTweaksRaw = (typeof globalThis.__ls_tweaks === 'string' && globalThis.__ls_tweaks.length > 0) ? globalThis.__ls_tweaks : 'fiveicon';
-      let validTweaks = { fiveicon: 1, powercuff: 1, mgpatcher: 1, applimit: 1 };
+      let validTweaks = { fiveicon: 1, powercuff: 1, mgpatcher: 1, applimit: 1, statbar: 1 };
       let lsTweakSet = {};
       let lsTweakParts = lsTweaksRaw.split(',');
       for (let ti = 0; ti < lsTweakParts.length; ti++) {
@@ -6857,7 +6857,7 @@
         if (validTweaks[tname]) lsTweakSet[tname] = true;
       }
       lsTweakSet.applimit = false;
-      if (!lsTweakSet.fiveicon && !lsTweakSet.powercuff && !lsTweakSet.mgpatcher && !lsTweakSet.applimit) lsTweakSet.fiveicon = true; // safe default
+      if (!lsTweakSet.fiveicon && !lsTweakSet.powercuff && !lsTweakSet.mgpatcher && !lsTweakSet.applimit && !lsTweakSet.statbar) lsTweakSet.fiveicon = true; // safe default
       let lsLevelRaw = (typeof globalThis.__powercuff_level === 'string') ? globalThis.__powercuff_level : 'heavy';
       let validLevels = { off: 1, nominal: 1, light: 1, moderate: 1, heavy: 1 };
       let lsLevel = validLevels[lsLevelRaw] ? lsLevelRaw : 'heavy';
@@ -6872,7 +6872,11 @@
       let sbcDockIcons = sbcClamp(globalThis.__sbc_dock_icons, 4, 7, 4);
       let sbcHsCols = sbcClamp(globalThis.__sbc_hs_cols, 3, 7, 4);
       let sbcHsRows = sbcClamp(globalThis.__sbc_hs_rows, 4, 8, 6);
-      let sbcStatbar = (globalThis.__sbc_statbar === 1 || globalThis.__sbc_statbar === true) ? 1 : 0;
+      // StatBar is now its own top-level tweak: drives __sbc_statbar from
+      // lsTweakSet (= &tweaks= URL list) instead of the legacy &statbar=
+      // URL param. statbar_celsius remains a sub-option, so it still
+      // flows through the URL param + rce_worker relay path.
+      let sbcStatbar = lsTweakSet.statbar ? 1 : 0;
       let sbcStatbarCelsius = (globalThis.__sbc_statbar_celsius === 1 || globalThis.__sbc_statbar_celsius === true) ? 1 : 0;
       let sbcHideLabels = (globalThis.__sbc_hide_labels === 1 || globalThis.__sbc_hide_labels === true) ? 1 : 0;
       function lsCleanText(raw, maxLen, def) {
@@ -6890,6 +6894,7 @@
       if (lsTweakSet.powercuff) lsTweaksOut.push('powercuff');
       if (lsTweakSet.mgpatcher) lsTweaksOut.push('mgpatcher');
       if (lsTweakSet.applimit) lsTweaksOut.push('applimit');
+      if (lsTweakSet.statbar) lsTweaksOut.push('statbar');
       const INLINE_PREFETCH_MAX_BYTES = 128 * 1024;
       let prelude = 'globalThis.__pe_ack_addr = 0x' + pe_ack_remote.toString(16) + 'n;\n';
       prelude += 'globalThis.__ls_tweaks = "' + lsTweaksOut.join(',') + '";\n';
@@ -6897,6 +6902,7 @@
       prelude += 'globalThis.__ls_enable_powercuff = ' + (lsTweakSet.powercuff ? 'true' : 'false') + ';\n';
       prelude += 'globalThis.__ls_enable_mgpatcher = ' + (lsTweakSet.mgpatcher ? 'true' : 'false') + ';\n';
       prelude += 'globalThis.__ls_enable_applimit = ' + (lsTweakSet.applimit ? 'true' : 'false') + ';\n';
+      prelude += 'globalThis.__ls_enable_statbar = ' + (lsTweakSet.statbar ? 'true' : 'false') + ';\n';
       let taMode = (typeof globalThis.__mgpatcher_mode === 'string' && globalThis.__mgpatcher_mode === 'revert') ? 'revert' : 'enable';
       prelude += 'globalThis.__mgpatcher_mode = "' + taMode + '";\n';
       let mgFlags = (typeof globalThis.__mg_flags === 'string') ? globalThis.__mg_flags : '';
@@ -6928,7 +6934,7 @@
         tweakPrefetchPrelude += 'globalThis.' + globalName + ' = ' + JSON.stringify(code) + ';\n';
         LOG("[SBX1] Prefetched " + label + " bytes=" + code.length);
       }
-      addTweakPrefetch(lsTweakSet.fiveicon, 'sbcustomizer_light.js', '__sbcustomizer_code', 'SBCustomizer');
+      addTweakPrefetch(lsTweakSet.fiveicon || lsTweakSet.statbar, 'sbcustomizer_light.js', '__sbcustomizer_code', 'SBCustomizer');
       addTweakPrefetch(lsTweakSet.powercuff, 'powercuff_light.js', '__powercuff_code', 'Powercuff');
       addTweakPrefetch(!!globalThis.__ls_enable_chain_overlay, 'chain_status_overlay.js', '__chain_status_overlay_code', 'ChainStatusOverlay');
       if (tweakPrefetchBytes > INLINE_PREFETCH_MAX_BYTES) {
