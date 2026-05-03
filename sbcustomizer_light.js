@@ -1299,7 +1299,15 @@
       }
     }
     if (freeRamGB > 0) {
-      parts.push(freeRamGB.toFixed(2) + "GB");
+      // Show in GB by default; flip to MB when under 1 GB so the user
+      // sees meaningful precision in low-memory situations (the device
+      // is approaching pressure thresholds and the GB-with-2-decimals
+      // format would mostly read as "0.5xGB" / "0.4xGB").
+      if (freeRamGB < 1) {
+        parts.push((freeRamGB * 1024).toFixed(2) + "MB");
+      } else {
+        parts.push(freeRamGB.toFixed(2) + "GB");
+      }
     }
     if (STATBAR_SHOW_NET) {
       const net = getNetSpeedMBps();
