@@ -692,6 +692,8 @@ self[1] = boxed_arr;
           try { globalThis.__sbc_statbar_celsius = (data.ls_sbc_statbar_celsius === 1 || data.ls_sbc_statbar_celsius === true) ? 1 : 0; } catch (e) { globalThis.__sbc_statbar_celsius = 0; }
           try { globalThis.__sbc_statbar_hide_net = (data.ls_sbc_statbar_hide_net === 1 || data.ls_sbc_statbar_hide_net === true) ? 1 : 0; } catch (e) { globalThis.__sbc_statbar_hide_net = 0; }
           try { globalThis.__sbc_hide_labels = (data.ls_sbc_hide_labels === 1 || data.ls_sbc_hide_labels === true) ? 1 : 0; } catch (e) { globalThis.__sbc_hide_labels = 0; }
+          try { globalThis.__sbc_speedster_jitter = (data.ls_sbc_speedster_jitter === 1 || data.ls_sbc_speedster_jitter === true) ? 1 : 0; } catch (e) { globalThis.__sbc_speedster_jitter = 0; }
+          try { globalThis.__sbc_speedster_wake = (data.ls_sbc_speedster_wake === 1 || data.ls_sbc_speedster_wake === true) ? 1 : 0; } catch (e) { globalThis.__sbc_speedster_wake = 0; }
           try { globalThis.__mgpatcher_mode = (typeof data.ls_mgpatcher_mode === 'string') ? data.ls_mgpatcher_mode : 'enable'; } catch (e) { globalThis.__mgpatcher_mode = 'enable'; }
           try { globalThis.__mg_flags = (typeof data.ls_mg_flags === 'string') ? data.ls_mg_flags : ''; } catch (e) { globalThis.__mg_flags = ''; }
           try { globalThis.__mg_unflags = (typeof data.ls_mg_unflags === 'string') ? data.ls_mg_unflags : ''; } catch (e) { globalThis.__mg_unflags = ''; }

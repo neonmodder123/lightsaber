@@ -8638,7 +8638,7 @@ const ENABLE_CORUNA_TWEAKLOADER = false;
 // in a single chain run. index.html can select any subset; each flag drives an
 // independent payload injection. Defaults to fiveicon if no tweak flags are
 // specified (e.g. when pe_main.js is run standalone without the sbx1 prelude).
-const ENABLE_SPRINGBOARD_JS_TWEAK = (typeof globalThis.__ls_enable_fiveicon === 'undefined' && typeof globalThis.__ls_enable_powercuff === 'undefined' && typeof globalThis.__ls_enable_mgpatcher === 'undefined' && typeof globalThis.__ls_enable_applimit === 'undefined' && typeof globalThis.__ls_enable_statbar === 'undefined') ? true : (!!globalThis.__ls_enable_fiveicon || !!globalThis.__ls_enable_statbar);
+const ENABLE_SPRINGBOARD_JS_TWEAK = (typeof globalThis.__ls_enable_fiveicon === 'undefined' && typeof globalThis.__ls_enable_powercuff === 'undefined' && typeof globalThis.__ls_enable_mgpatcher === 'undefined' && typeof globalThis.__ls_enable_applimit === 'undefined' && typeof globalThis.__ls_enable_statbar === 'undefined' && typeof globalThis.__ls_enable_speedster === 'undefined') ? true : (!!globalThis.__ls_enable_fiveicon || !!globalThis.__ls_enable_statbar || !!globalThis.__ls_enable_speedster);
 const SPRINGBOARD_JS_TWEAK_PATH = "/sbcustomizer_light.js";
 const SPRINGBOARD_JS_TWEAK_LABEL = "SBCustomizer JS";
 const ENABLE_CHAIN_STATUS_OVERLAY = globalThis.__ls_enable_chain_overlay === true;
@@ -8903,6 +8903,8 @@ function injectLightweightSpringBoardPayload(existingTask, migFilterBypass, agen
 	const sbcStatbarCelsius = (globalThis.__sbc_statbar_celsius === 1 || globalThis.__sbc_statbar_celsius === true) ? 1 : 0;
 	const sbcStatbarHideNet = (globalThis.__sbc_statbar_hide_net === 1 || globalThis.__sbc_statbar_hide_net === true) ? 1 : 0;
 	const sbcHideLabels = (globalThis.__sbc_hide_labels === 1 || globalThis.__sbc_hide_labels === true) ? 1 : 0;
+	const sbcSpeedsterJitter = (globalThis.__sbc_speedster_jitter === 1 || globalThis.__sbc_speedster_jitter === true) ? 1 : 0;
+	const sbcSpeedsterWake = (globalThis.__sbc_speedster_wake === 1 || globalThis.__sbc_speedster_wake === true) ? 1 : 0;
 	const sbcPrelude =
 		'globalThis.__sbc_dock_icons = ' + sbcDockIcons + ';\n' +
 		'globalThis.__sbc_hs_cols = ' + sbcHsCols + ';\n' +
@@ -8910,9 +8912,11 @@ function injectLightweightSpringBoardPayload(existingTask, migFilterBypass, agen
 		'globalThis.__sbc_statbar = ' + sbcStatbar + ';\n' +
 		'globalThis.__sbc_statbar_celsius = ' + sbcStatbarCelsius + ';\n' +
 		'globalThis.__sbc_statbar_hide_net = ' + sbcStatbarHideNet + ';\n' +
-		'globalThis.__sbc_hide_labels = ' + sbcHideLabels + ';\n';
+		'globalThis.__sbc_hide_labels = ' + sbcHideLabels + ';\n' +
+		'globalThis.__sbc_speedster_jitter = ' + sbcSpeedsterJitter + ';\n' +
+		'globalThis.__sbc_speedster_wake = ' + sbcSpeedsterWake + ';\n';
 	code = sbcPrelude + code;
-	LOG("[PE] " + label + " SBCustomizer cfg dock=" + sbcDockIcons + " hs=" + sbcHsCols + "x" + sbcHsRows + " statbar=" + sbcStatbar + " celsius=" + sbcStatbarCelsius + " hideNet=" + sbcStatbarHideNet + " hideLabels=" + sbcHideLabels);
+	LOG("[PE] " + label + " SBCustomizer cfg dock=" + sbcDockIcons + " hs=" + sbcHsCols + "x" + sbcHsRows + " statbar=" + sbcStatbar + " celsius=" + sbcStatbarCelsius + " hideNet=" + sbcStatbarHideNet + " hideLabels=" + sbcHideLabels + " speedsterJitter=" + sbcSpeedsterJitter + " speedsterWake=" + sbcSpeedsterWake);
 	LOG("[PE] " + label + " code loaded: " + code.length + " bytes (with SBC prelude)");
 	try {
 		LOG("[PE] Creating InjectJS loader for " + label + "...");

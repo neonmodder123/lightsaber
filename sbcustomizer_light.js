@@ -99,6 +99,29 @@
   // no FP regs, no new class lookups. Verified against 18.6.2 SpringBoardHome
   // dump (line 27063: -[SBIconListGridLayoutConfiguration setShowsLabels:]).
   const ENABLE_HIDE_LABELS = (globalThis.__sbc_hide_labels === 1 || globalThis.__sbc_hide_labels === true);
+  // Speedster (in development / unstable): ports a small subset of
+  // Hoangdus/Speedster (GPLv3) using the FBSettings domain hierarchy
+  // instead of the substrate-style IMP hooks Speedster uses on
+  // jailbroken iOS. We reach the live settings instances iOS itself
+  // reads, then write the sub-setting BOOL/double ivars directly via
+  // the bridge. No swizzle, no kernel R/W. Two features in v1:
+  //   - jitter:   [[SBHHomeScreenDomain rootSettings] iconSettings]
+  //               setSuppressJitter:YES   (kills home-screen jiggle in
+  //               edit mode; iOS already ships the toggle, just no UI)
+  //   - fastWake: [[SBSystemAnimationDomain rootSettings] wakeAnimationSettings]
+  //               setSpeedMultiplierForWake:3.0 +
+  //               setSpeedMultiplierForLiftToWake:3.0 +
+  //               setBacklightFadeDuration:0.05  (3x faster screen wake;
+  //               needs FP bridge for the doubles)
+  // Marked unstable because it's a one-shot apply: if iOS rebuilds the
+  // rootSettings (e.g. respring, scene swap) the override is lost
+  // until the chain is re-run. Persistence via tick-loop reapply is a
+  // future iteration.
+  const ENABLE_SPEEDSTER = (globalThis.__ls_enable_speedster === 1 || globalThis.__ls_enable_speedster === true);
+  const SPEEDSTER_SUPPRESS_JITTER = (globalThis.__sbc_speedster_jitter === 1 || globalThis.__sbc_speedster_jitter === true);
+  const SPEEDSTER_FAST_WAKE = (globalThis.__sbc_speedster_wake === 1 || globalThis.__sbc_speedster_wake === true);
+  const SPEEDSTER_WAKE_MULTIPLIER = 3.0;
+  const SPEEDSTER_BACKLIGHT_FADE_SEC = 0.05;
   // Grid reapply loop. Disabled by default after v0.0.83 shipped a version
   // that hung the device: the drift-detect-and-repatch approach works in
   // theory, but in practice after patchHomescreenGrid + forceRelayout the
@@ -1857,6 +1880,113 @@
     return touched > 0;
   }
 
+  // Speedster: traverse FBSettings domain hierarchy and patch live
+  // sub-setting ivars on the singleton rootSettings instance iOS itself
+  // reads. Verified on iOS 18.6.2 SpringBoardFoundation /
+  // SpringBoardHome / SpringBoard via IDA decompile of the relevant
+  // domain rootSettings + property accessors.
+  //
+  // Why not IMP swizzle: every setter we care about is a tight
+  // STR D0/X0,[X0,#imm] style ivar setter, but each call is on a
+  // transient settings object built per-animation and discarded. The
+  // values that survive to runtime live on the parent rootSettings
+  // singleton via property caches (e.g. SBHHomeScreenSettings.iconSettings,
+  // SBSystemAnimationSettings.wakeAnimationSettings). We mutate THOSE
+  // caches directly. The transient setters are bypassed.
+  function applySpeedster(passTag) {
+    if (!ENABLE_SPEEDSTER) {
+      log("applySpeedster(" + passTag + ") skipped: ENABLE_SPEEDSTER=false");
+      return false;
+    }
+    log("applySpeedster(" + passTag + ") entered jitter=" + SPEEDSTER_SUPPRESS_JITTER + " fastWake=" + SPEEDSTER_FAST_WAKE);
+    let applied = 0;
+
+    if (SPEEDSTER_SUPPRESS_JITTER) {
+      try {
+        // -[SBIconView _addJitterAnimated:] reads
+        //   [[[SBHHomeScreenDomain rootSettings] iconSettings] suppressJitter]
+        // and bails immediately when YES. Verified at 0x1d7f7fc1c on
+        // 18.6.2 SpringBoardHome.
+        const SBHHomeScreenDomain = Native.callSymbol("objc_getClass", "SBHHomeScreenDomain");
+        if (!isObjcReceiver(SBHHomeScreenDomain)) {
+          log("speedster jitter: SBHHomeScreenDomain class not found - SpringBoardHome not loaded?");
+        } else {
+          const root = objc(SBHHomeScreenDomain, "rootSettings");
+          if (!isObjcReceiver(root)) {
+            log("speedster jitter: SBHHomeScreenDomain.rootSettings nil/invalid (0x" + u64(root).toString(16) + ")");
+          } else {
+            const iconSet = objc(root, "iconSettings");
+            if (!isObjcReceiver(iconSet)) {
+              log("speedster jitter: rootSettings.iconSettings nil/invalid (0x" + u64(iconSet).toString(16) + ")");
+            } else {
+              objc(iconSet, "setSuppressJitter:", 1n);
+              const after = objc(iconSet, "suppressJitter");
+              log("speedster jitter: setSuppressJitter:YES applied iconSettings=0x" + u64(iconSet).toString(16) + " readback=" + (Number(after) ? "YES" : "NO"));
+              if (Number(after)) applied++;
+            }
+          }
+        }
+      } catch (e) {
+        log("speedster jitter err: " + String(e));
+      }
+    }
+
+    if (SPEEDSTER_FAST_WAKE) {
+      try {
+        // SBSystemAnimationDomain.rootSettings -> SBSystemAnimationSettings,
+        // .wakeAnimationSettings property returns the cached
+        // SBFWakeAnimationSettings instance whose ivars
+        // -backlightFadeDuration / -speedMultiplierForWake /
+        // -speedMultiplierForLiftToWake supply the actual values iOS
+        // reads when waking the screen. Verified at
+        // 0x18b7ca61c..0x18b7ca65c on 18.6.2 SpringBoardFoundation.
+        // Setters take double (CGFloat) -> need FP bridge for d0.
+        const SBSystemAnimationDomain = Native.callSymbol("objc_getClass", "SBSystemAnimationDomain");
+        if (!isObjcReceiver(SBSystemAnimationDomain)) {
+          log("speedster wake: SBSystemAnimationDomain class not found");
+        } else {
+          const root = objc(SBSystemAnimationDomain, "rootSettings");
+          if (!isObjcReceiver(root)) {
+            log("speedster wake: rootSettings nil/invalid (0x" + u64(root).toString(16) + ")");
+          } else {
+            const wake = objc(root, "wakeAnimationSettings");
+            if (!isObjcReceiver(wake)) {
+              log("speedster wake: rootSettings.wakeAnimationSettings nil/invalid (0x" + u64(wake).toString(16) + ")");
+            } else {
+              // FP bridge: setSpeedMultiplierForWake: takes double in d0
+              Native.callSymbolFP("objc_msgSend",
+                [wake, sel("setSpeedMultiplierForWake:")],
+                [SPEEDSTER_WAKE_MULTIPLIER]);
+              Native.callSymbolFP("objc_msgSend",
+                [wake, sel("setSpeedMultiplierForLiftToWake:")],
+                [SPEEDSTER_WAKE_MULTIPLIER]);
+              Native.callSymbolFP("objc_msgSend",
+                [wake, sel("setBacklightFadeDuration:")],
+                [SPEEDSTER_BACKLIGHT_FADE_SEC]);
+              // Readback for diagnostics. Reading FP ivars also goes
+              // through d0 return path; use callSymbolFP + fpReturn(0).
+              Native.callSymbolFP("objc_msgSend",
+                [wake, sel("speedMultiplierForWake")],
+                []);
+              const wakeRead = Native.fpReturn(0);
+              Native.callSymbolFP("objc_msgSend",
+                [wake, sel("backlightFadeDuration")],
+                []);
+              const fadeRead = Native.fpReturn(0);
+              log("speedster wake: applied wake=0x" + u64(wake).toString(16) + " mul=" + wakeRead.toFixed(3) + " fade=" + fadeRead.toFixed(3));
+              applied++;
+            }
+          }
+        }
+      } catch (e) {
+        log("speedster wake err: " + String(e));
+      }
+    }
+
+    log("applySpeedster(" + passTag + ") done applied=" + applied);
+    return applied > 0;
+  }
+
   try {
     log("=== sbcustomizer_light.js entry ===");
     Native.init();
@@ -1864,6 +1994,7 @@
     const bi = Native.bridgeInfo();
     globalThis.__sbcust_jsctx_obj = bi.jsContextObj;
     globalThis.__sbcust_apply_once = applyDockPatch;
+    globalThis.__sbcust_speedster = applySpeedster;
     globalThis.__sbcust_log = log;
     // Exposed so the polled reapply loop (and any external probe) can kick
     // a drift check + re-patch on the main thread via runOnMainEvaluate.
@@ -1946,7 +2077,7 @@
     // the worker means there's no second dispatch to overlap with main's
     // execution; after this returns the worker has zero further bridge
     // calls to make and just exits cleanly.
-    runOnMainEvaluate("try{__sbcust_log('main-thread dispatch alive');__sbcust_apply_once('main-pass-1');__sbcust_statbar();}catch(e){__sbcust_log('combined-dispatch err: '+e);}");
+    runOnMainEvaluate("try{__sbcust_log('main-thread dispatch alive');__sbcust_apply_once('main-pass-1');__sbcust_statbar();__sbcust_speedster('main-pass-1');}catch(e){__sbcust_log('combined-dispatch err: '+e);}");
 
     if (ENABLE_SECOND_PASS) {
       Native.callSymbol("usleep", 1200000);

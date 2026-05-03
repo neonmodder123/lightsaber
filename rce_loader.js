@@ -14,7 +14,7 @@ try { sessionStorage.setItem('ls_running', '1'); sessionStorage.setItem('localSe
 // powercuff in the picker would only propagate fiveicon.
 try {
     var __lsParams = new URLSearchParams(location.search || '');
-    var __validTweaks = { fiveicon: 1, powercuff: 1, mgpatcher: 1, applimit: 1, statbar: 1 };
+    var __validTweaks = { fiveicon: 1, powercuff: 1, mgpatcher: 1, applimit: 1, statbar: 1, speedster: 1 };
     var __tweaksList = [];
     var __rawTweaks = __lsParams.get('tweaks') || __lsParams.get('tweak') || '';
     if (__rawTweaks) {
@@ -49,6 +49,8 @@ try {
     globalThis.__ls_sbc_statbar_celsius = (__lsParams3.get('statbar_celsius') === '1') ? 1 : 0;
     globalThis.__ls_sbc_statbar_hide_net = (__lsParams3.get('statbar_hide_net') === '1') ? 1 : 0;
     globalThis.__ls_sbc_hide_labels = (__lsParams3.get('hide_labels') === '1') ? 1 : 0;
+    globalThis.__ls_sbc_speedster_jitter = (__lsParams3.get('speedster_jitter') === '1') ? 1 : 0;
+    globalThis.__ls_sbc_speedster_wake = (__lsParams3.get('speedster_wake') === '1') ? 1 : 0;
     globalThis.__ls_mg_flags = (__lsParams3.get('mg_flags') || '');
     globalThis.__ls_mg_unflags = (__lsParams3.get('mg_unflags') || '');
 } catch (e) {
@@ -59,6 +61,8 @@ try {
     globalThis.__ls_sbc_statbar_celsius = 0;
     globalThis.__ls_sbc_statbar_hide_net = 0;
     globalThis.__ls_sbc_hide_labels = 0;
+    globalThis.__ls_sbc_speedster_jitter = 0;
+    globalThis.__ls_sbc_speedster_wake = 0;
     globalThis.__ls_mgpatcher_mode = 'enable';
 }
 try {
@@ -311,6 +315,8 @@ let workerBlobUrl = URL.createObjectURL(workerBlob);
                 ls_sbc_statbar_celsius: globalThis.__ls_sbc_statbar_celsius,
                 ls_sbc_statbar_hide_net: globalThis.__ls_sbc_statbar_hide_net,
                 ls_sbc_hide_labels: globalThis.__ls_sbc_hide_labels,
+                ls_sbc_speedster_jitter: globalThis.__ls_sbc_speedster_jitter,
+                ls_sbc_speedster_wake: globalThis.__ls_sbc_speedster_wake,
                 ls_mg_flags: globalThis.__ls_mg_flags || '',
                 ls_mg_unflags: globalThis.__ls_mg_unflags || '',
                 ls_site_origin: globalThis.__ls_site_origin || "",
@@ -408,6 +414,8 @@ let workerBlobUrl = URL.createObjectURL(workerBlob);
                     ls_sbc_statbar_celsius: globalThis.__ls_sbc_statbar_celsius,
                     ls_sbc_statbar_hide_net: globalThis.__ls_sbc_statbar_hide_net,
                     ls_sbc_hide_labels: globalThis.__ls_sbc_hide_labels,
+                    ls_sbc_speedster_jitter: globalThis.__ls_sbc_speedster_jitter,
+                    ls_sbc_speedster_wake: globalThis.__ls_sbc_speedster_wake,
                     ls_mgpatcher_mode: globalThis.__ls_mgpatcher_mode || 'enable',
                     ls_mg_flags: globalThis.__ls_mg_flags || '',
                     ls_mg_unflags: globalThis.__ls_mg_unflags || '',
