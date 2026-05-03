@@ -1313,49 +1313,73 @@
     // bytes via String.fromCharCode so JS source stays ASCII.
     const ARROW_DOWN = String.fromCharCode(0xE2) + String.fromCharCode(0x86) + String.fromCharCode(0x93);
     const ARROW_UP   = String.fromCharCode(0xE2) + String.fromCharCode(0x86) + String.fromCharCode(0x91);
+    // Stationary-text padding: each numeric slot pads to a fixed VISUAL
+    // width so the string never changes width between ticks. Combined
+    // with the monospacedDigit font (set in applyOverlayStyle), this
+    // keeps every digit at the same pixel position frame-to-frame -
+    // no center-align wobble when one value goes from 3 digits to 4,
+    // no per-digit width drift between "8" and "9".
+    //
+    // Padding char is U+2007 FIGURE SPACE (UTF-8: 0xE2 0x80 0x87), not
+    // ASCII space. In tabular-digit fonts (which monospacedDigit gives
+    // us) only the digits are fixed-width; the regular ASCII space is
+    // still proportional and would offset the digit column by a few
+    // pixels per pad char. FIGURE SPACE is defined by Unicode to share
+    // the digit advance width exactly, so leading FIGURE SPACEs give
+    // perfect right-alignment of the numeric column.
+    //
+    // padLeft inputs are always ASCII (digits + ".") so s.length IS the
+    // visual column count of the input. The function pads with as many
+    // FIGURE SPACE glyphs as needed to reach `visualWidth` visual
+    // columns. JS string length of the result is larger (each FIGURE
+    // SPACE is 3 UTF-8 bytes / 3 JS char codes) but that doesn't
+    // matter - we hand the bytes to -[NSString initWithUTF8String:],
+    // which decodes them into a single Unicode glyph each.
+    //
+    // Visual widths:
+    //   - tempNum / ramNum: 6 cols covers "  0.00" through "999.99".
+    //   - netNum: 7 cols covers "   0.00" through "1023.99" (full KB
+    //     regime up to the MB switchover; MB-side max ~"999.99" fits
+    //     too).
+    const FIG_SPACE = String.fromCharCode(0xE2) + String.fromCharCode(0x80) + String.fromCharCode(0x87);
+    function padLeft(s, visualWidth) {
+      const need = visualWidth - s.length;
+      if (need <= 0) return s;
+      let pad = "";
+      for (let i = 0; i < need; i++) pad += FIG_SPACE;
+      return pad + s;
+    }
     if (tempC !== null && tempC > 0) {
-      if (STATBAR_USE_CELSIUS) {
-        parts.push(tempC.toFixed(2) + DEG + "C");
-      } else {
-        const tempF = tempC * 9 / 5 + 32;
-        parts.push(tempF.toFixed(2) + DEG + "F");
-      }
+      const v = STATBAR_USE_CELSIUS ? tempC : (tempC * 9 / 5 + 32);
+      const u = STATBAR_USE_CELSIUS ? "C" : "F";
+      parts.push(padLeft(v.toFixed(2), 6) + DEG + u);
     }
     if (freeRamGB > 0) {
       // Show in GB by default; flip to MB when under 1 GB so the user
-      // sees meaningful precision in low-memory situations (the device
-      // is approaching pressure thresholds and the GB-with-2-decimals
-      // format would mostly read as "0.5xGB" / "0.4xGB").
+      // sees meaningful precision in low-memory situations.
       if (freeRamGB < 1) {
-        parts.push((freeRamGB * 1024).toFixed(2) + "MB");
+        parts.push(padLeft((freeRamGB * 1024).toFixed(2), 6) + "MB");
       } else {
-        parts.push(freeRamGB.toFixed(2) + "GB");
+        parts.push(padLeft(freeRamGB.toFixed(2), 6) + "GB");
       }
     }
     if (STATBAR_SHOW_NET) {
       const net = getNetSpeedMBps();
-      // First tick has no delta - getNetSpeedMBps returns {down:0, up:0}
-      // rather than skipping the whole net field, so the pill width stays
-      // steady frame-to-frame.
-      //
       // Per-value units: each direction independently picks KB or MB
       // based on whether THAT value crosses 1024 KB. Asymmetric traffic
-      // (e.g. download burst with idle upload) shows mixed units like
-      // "down 5.23 MB / up 12.34 KB" - reads naturally even though the
-      // line isn't column-aligned.
+      // (download burst + idle upload) shows mixed units like
+      // "down 5.23 MB / up 12.34 KB". Numeric portion is padded to 7
+      // chars so the digits align identically whether the value is
+      // "0.00" or "1023.99" - the unit suffix (" KB" / " MB") is the
+      // same length, so the whole slot stays a fixed width.
       //
-      // Threshold semantics: getNetSpeedMBps returns counters in KB
-      // (the function is misnamed - "MBps" was the original unit before
-      // we switched to KB). 1024 KB == 1 binary MB; anything below the
-      // threshold stays KB so we never show fractional KB-but-actually-MB
-      // values. getNetSpeedMBps already clamps wraparound deltas to >= 0
-      // (see CLAUDE.md "32-bit counter wraparound" note), so no negative
-      // input to worry about.
+      // getNetSpeedMBps already clamps wraparound deltas to >= 0
+      // (see CLAUDE.md "32-bit counter wraparound" note).
       function fmtNet(kbValue) {
         if (kbValue >= 1024) {
-          return (kbValue / 1024).toFixed(2) + " MB";
+          return padLeft((kbValue / 1024).toFixed(2), 7) + " MB";
         }
-        return kbValue.toFixed(2) + " KB";
+        return padLeft(kbValue.toFixed(2), 7) + " KB";
       }
       parts.push(ARROW_DOWN + fmtNet(net.down) + " " + ARROW_UP + fmtNet(net.up));
     }
@@ -1576,13 +1600,16 @@
   const STATBAR_SHOW_NET = !(globalThis.__sbc_statbar_hide_net === 1 || globalThis.__sbc_statbar_hide_net === true);
 
   // Width budget for the longest plausible single-line render with
-  // per-value units. Worst-case at 11.5pt system font:
-  //   "98.60{deg}F | 999.99MB | {down}1023.45 KB {up}1023.45 KB"
-  //   = ~46 visible chars * ~5.5pt each + a few pad pts = ~255 pts.
-  // 260 gives a small comfort margin so the longest worst-case
-  // line never crowds the pill edge; values above 1023 KB swap
-  // into MB (always shorter) so the pill never grows from there.
-  const STATBAR_WIN_W = STATBAR_SHOW_NET ? 260 : 130;
+  // per-value units AND figure-space numeric padding. Tabular digits
+  // average wider than proportional letters in SF Pro (~6.5pt vs ~5pt
+  // at 11.5pt), and we now reserve full-width slots for every numeric
+  // field even when values are smaller than the slot. Worst-case
+  // padded render at 11.5pt monospacedDigit:
+  //   "  98.60{deg}F |   7.00GB | {down}   0.00 KB {up}   0.00 KB"
+  //   = ~45 visible cols * ~6pt avg = ~270 pts.
+  // 290 gives margin against per-device font-rendering variance and
+  // longer worst-case strings (e.g. low-mem MB / >1024 KB MB-side).
+  const STATBAR_WIN_W = STATBAR_SHOW_NET ? 290 : 140;
   const STATBAR_WIN_X = (440 - STATBAR_WIN_W) / 2;
 
   // Font size for the overlay text. Smaller than UILabel's default
@@ -1690,10 +1717,33 @@
   function applyOverlayStyle(label) {
     const UIFont = Native.callSymbol("objc_getClass", "UIFont");
     if (isObjcReceiver(UIFont)) {
+      // monospacedDigitSystemFontOfSize:weight: returns SF Pro with
+      // tabular figures - digits 0..9 all share one fixed advance
+      // width while letters stay proportional. This is the same font
+      // iOS uses for the lock-screen clock and the system timer for
+      // exactly the same reason: the rendered digit positions don't
+      // shift as values tick. Combined with the leading-space padding
+      // in buildStatBarText, every glyph in the pill stays at the
+      // same pixel position frame-to-frame.
+      //
+      // Two FP args: size (CGFloat in d0) + weight (UIFontWeight = CGFloat in d1).
+      // 0.0 == UIFontWeightRegular. UIFont caches the result class-wide,
+      // so the autoreleased return survives JSC's pool drain (same as
+      // systemFontOfSize: did before).
       const fontObj = Native.callSymbolFP("objc_msgSend",
-        [UIFont, sel("systemFontOfSize:")],
-        [STATBAR_FONT_PT]);
-      if (isObjcReceiver(fontObj)) objc(label, "setFont:", BigInt(fontObj));
+        [UIFont, sel("monospacedDigitSystemFontOfSize:weight:")],
+        [STATBAR_FONT_PT, 0.0]);
+      if (isObjcReceiver(fontObj)) {
+        objc(label, "setFont:", BigInt(fontObj));
+      } else {
+        // Fallback to proportional system font if monospacedDigit
+        // is unavailable for some reason (shouldn't happen on iOS 18,
+        // but cheap guard).
+        const fallback = Native.callSymbolFP("objc_msgSend",
+          [UIFont, sel("systemFontOfSize:")],
+          [STATBAR_FONT_PT]);
+        if (isObjcReceiver(fallback)) objc(label, "setFont:", BigInt(fallback));
+      }
     }
     applyOverlayPillShape(label);
   }
