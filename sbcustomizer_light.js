@@ -1313,7 +1313,9 @@
       const net = getNetSpeedMBps();
       // First tick has no delta - show 0.00 / 0.00 rather than skipping
       // the whole net field, so the pill width stays steady frame-to-frame.
-      parts.push(ARROW_DOWN + net.down.toFixed(2) + " " + ARROW_UP + net.up.toFixed(2));
+      // Single "KB" suffix at the end (instead of per-value) keeps the
+      // pill compact while still labeling the unit.
+      parts.push(ARROW_DOWN + net.down.toFixed(2) + " " + ARROW_UP + net.up.toFixed(2) + " KB");
     }
     if (!parts.length) return "n/a";
     return parts.join(" | ");
@@ -1512,12 +1514,12 @@
   // edge a few points under the island's bottom curve so the text
   // doesn't kiss the silhouette.
   //
-  // Pill width is content-driven: with net speed shown the worst-case
-  // text is ~38 chars at 11.5pt
-  // ("98.60{deg}F | 7.00GB | {dn}12345.67 {up}1234.56" - heavy
-  // wifi/cellular peak), needs ~240pt; without net it's ~16 chars
-  // ("98.60{deg}F | 7.00GB"), 130pt is plenty. Pick at install-time
-  // based on STATBAR_SHOW_NET so the pill always hugs its content.
+  // Pill width is content-driven: with net speed shown the typical
+  // text is ~36 chars at 11.5pt
+  // ("98.60{deg}F | 7.00GB | {dn}123.45 {up}45.67 KB"), fits comfortably
+  // at 220pt. Worst case (5-digit speeds at peak wifi/cellular) may
+  // truncate slightly but UILabel handles overflow gracefully. Without
+  // net it's ~16 chars ("98.60{deg}F | 7.00GB"), 130pt is plenty.
   const STATBAR_WIN_Y = 54;
   const STATBAR_WIN_H = 18;
 
@@ -1531,7 +1533,7 @@
   // "off" / unchecked / undefined leaves net visible.
   const STATBAR_SHOW_NET = !(globalThis.__sbc_statbar_hide_net === 1 || globalThis.__sbc_statbar_hide_net === true);
 
-  const STATBAR_WIN_W = STATBAR_SHOW_NET ? 240 : 130;
+  const STATBAR_WIN_W = STATBAR_SHOW_NET ? 220 : 130;
   const STATBAR_WIN_X = (440 - STATBAR_WIN_W) / 2;
 
   // Font size for the overlay text. Smaller than UILabel's default
